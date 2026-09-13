@@ -1,0 +1,6 @@
+{
+  "name": "PS Invoice",
+  "description": "Create, customize, and export professional invoices with psgss91@gmail.com Google Drive Cloud Server data sync, app update distribution, exclusive admin control panel, and 7-day user access management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
