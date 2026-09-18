@@ -24,7 +24,7 @@ export const TemplatePicker: React.FC<TemplatePickerProps> = ({ invoice, onChang
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-5 shadow-xs">
+    <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 space-y-4 sm:space-y-5 shadow-xs">
       {/* TEMPLATE STYLES */}
       <div>
         <div className="flex items-center gap-2 mb-2.5">

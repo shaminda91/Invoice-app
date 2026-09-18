@@ -28,37 +28,57 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth);
+        const rect = containerRef.current.getBoundingClientRect();
+        const w = rect.width || containerRef.current.clientWidth || window.innerWidth;
+        if (w > 0) {
+          setContainerWidth(Math.floor(w));
+        }
       }
       if (paperRef.current) {
-        setPaperHeight(paperRef.current.offsetHeight);
+        // Measure unscaled content height
+        const h = paperRef.current.scrollHeight || paperRef.current.offsetHeight;
+        if (h && h > 100) {
+          setPaperHeight(h);
+        }
       }
     };
 
     updateDimensions();
 
-    const resizeObserver = new ResizeObserver(() => {
-      updateDimensions();
-    });
-
-    if (containerRef.current) resizeObserver.observe(containerRef.current);
-    if (paperRef.current) resizeObserver.observe(paperRef.current);
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        updateDimensions();
+      });
+      if (containerRef.current) resizeObserver.observe(containerRef.current);
+      if (paperRef.current) resizeObserver.observe(paperRef.current);
+    }
 
     window.addEventListener('resize', updateDimensions);
+    window.addEventListener('orientationchange', updateDimensions);
+
+    // Run short delays to ensure clean layout calculation after DOM transitions
+    const t1 = setTimeout(updateDimensions, 60);
+    const t2 = setTimeout(updateDimensions, 250);
 
     return () => {
-      resizeObserver.disconnect();
+      if (resizeObserver) resizeObserver.disconnect();
       window.removeEventListener('resize', updateDimensions);
+      window.removeEventListener('orientationchange', updateDimensions);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
-  }, [invoice]);
+  }, [invoice, autoFit, zoomLevel]);
 
   const totals = calculateInvoiceTotals(invoice);
   const { currency, accentColor, template } = invoice;
 
   // Compute effective scale based on autoFit or manual zoom
   // Base A4 document width in CSS is 800px.
+  // When autoFit is true, scale to match the container's width cleanly with minimal margin
+  const availableWidth = containerWidth > 0 ? containerWidth - 16 : 800;
   const autoScale = containerWidth > 0
-    ? Math.min(1.0, Math.max(0.32, (containerWidth - 24) / 800))
+    ? Math.min(1.0, Math.max(0.25, availableWidth / 800))
     : 1.0;
 
   const effectiveScale = autoFit ? autoScale : zoomLevel / 100;
@@ -84,7 +104,8 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
     overdue: t.overdue.toUpperCase(),
   };
 
-  const scaledHeight = paperHeight > 0 ? Math.ceil(paperHeight * effectiveScale) : undefined;
+  const scaledWidth = Math.ceil(800 * effectiveScale);
+  const scaledHeight = Math.ceil((paperHeight || 1050) * effectiveScale);
 
   return (
     <div
@@ -92,13 +113,14 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
       id="invoice-preview-container"
       className="w-full flex justify-center py-2 px-1 transition-all overflow-x-auto"
     >
+      {/* Outer wrapper matches exactly the scaled dimensions so it centers without negative overflow */}
       <div
         style={{
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          height: scaledHeight ? `${scaledHeight + 20}px` : 'auto',
-          overflow: 'visible',
+          width: `${scaledWidth}px`,
+          height: `${scaledHeight + 16}px`,
+          position: 'relative',
+          flexShrink: 0,
+          margin: '0 auto',
         }}
       >
         <div
@@ -106,9 +128,12 @@ export const InvoicePreview: React.FC<InvoicePreviewProps> = ({
           id="invoice-paper"
           style={{
             transform: `scale(${effectiveScale})`,
-            transformOrigin: 'top center',
+            transformOrigin: 'top left',
             width: '800px',
             minWidth: '800px',
+            position: 'absolute',
+            top: 0,
+            left: 0,
           }}
           className={`bg-white text-slate-800 shadow-xl print:shadow-none print:m-0 print:w-full print:max-w-none print:min-h-0 print:p-8 p-10 md:p-12 flex flex-col justify-between rounded-sm border border-slate-200 print:border-none transition-transform`}
         >

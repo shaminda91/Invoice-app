@@ -86,8 +86,6 @@ export const SavedInvoicesModal: React.FC<SavedInvoicesModalProps> = ({
     return new Date().toISOString().split('T')[0];
   });
 
-  if (!isOpen) return null;
-
   // Helper: Parse invoice date safely
   const getInvoiceDate = (inv: Invoice): Date => {
     if (inv.issueDate) {
@@ -420,6 +418,8 @@ export const SavedInvoicesModal: React.FC<SavedInvoicesModalProps> = ({
   const collectionRate = reportTotals.totalRevenue > 0
     ? Math.round((reportTotals.totalPaid / reportTotals.totalRevenue) * 100)
     : 0;
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">

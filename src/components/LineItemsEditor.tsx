@@ -152,7 +152,7 @@ export const LineItemsEditor: React.FC<LineItemsEditorProps> = ({ items, currenc
 
               {/* QTY, UNIT, PRICE & TOTAL ROW (Responsive: 2-col on phones, 4-col on tablet/desktop) */}
               <div className="grid grid-cols-2 sm:grid-cols-12 gap-2.5 sm:gap-2 items-center">
-                <div className="col-span-1 sm:col-span-3">
+                <div className="col-span-1 sm:col-span-3 min-w-0">
                   <label className="block text-[11px] font-medium text-slate-500 mb-0.5">{t.qty}</label>
                   <input
                     type="number"
@@ -164,7 +164,7 @@ export const LineItemsEditor: React.FC<LineItemsEditorProps> = ({ items, currenc
                   />
                 </div>
 
-                <div className="col-span-1 sm:col-span-3">
+                <div className="col-span-1 sm:col-span-3 min-w-0">
                   <label className="block text-[11px] font-medium text-slate-500 mb-0.5">{t.unit}</label>
                   <input
                     type="text"
@@ -175,7 +175,7 @@ export const LineItemsEditor: React.FC<LineItemsEditorProps> = ({ items, currenc
                   />
                 </div>
 
-                <div className="col-span-1 sm:col-span-3">
+                <div className="col-span-1 sm:col-span-3 min-w-0">
                   <label className="block text-[11px] font-medium text-slate-500 mb-0.5">
                     {t.price} ({currency.symbol})
                   </label>
@@ -189,7 +189,7 @@ export const LineItemsEditor: React.FC<LineItemsEditorProps> = ({ items, currenc
                   />
                 </div>
 
-                <div className="col-span-1 sm:col-span-3 text-right bg-slate-100/70 sm:bg-transparent p-1.5 sm:p-0 rounded-lg">
+                <div className="col-span-1 sm:col-span-3 min-w-0 text-right bg-slate-100/70 sm:bg-transparent p-1.5 sm:p-0 rounded-lg">
                   <span className="block text-[11px] font-medium text-slate-500 mb-0.5">
                     {t.rowTotal}
                   </span>

@@ -14,6 +14,8 @@ export interface Translations {
   saveDraft: string;
   editTab: string;
   previewTab: string;
+  bothTab: string;
+  phoneFit: string;
   zoomIn: string;
   zoomOut: string;
   resetZoom: string;
@@ -421,6 +423,8 @@ export const translations: Record<AppLanguage, Translations> = {
     saveDraft: 'Save',
     editTab: 'Edit',
     previewTab: 'Preview',
+    bothTab: 'Both',
+    phoneFit: 'Phone Fit',
     zoomIn: 'Zoom In',
     zoomOut: 'Zoom Out',
     resetZoom: 'Reset Zoom',
@@ -827,6 +831,8 @@ export const translations: Record<AppLanguage, Translations> = {
     saveDraft: 'සුරකින්න',
     editTab: 'සංස්කරණය',
     previewTab: 'පෙරදසුන',
+    bothTab: 'දෙකම',
+    phoneFit: 'දුරකථනයට ගළපන්න',
     zoomIn: 'විශාල කරන්න',
     zoomOut: 'කුඩා කරන්න',
     resetZoom: 'මුල් ප්‍රමාණය',

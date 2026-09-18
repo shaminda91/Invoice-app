@@ -62,6 +62,7 @@ import {
   Menu,
   Maximize2,
   Smartphone,
+  Columns,
 } from 'lucide-react';
 import { MobileActionDrawer } from './components/MobileActionDrawer';
 
@@ -121,12 +122,7 @@ export default function App() {
   });
 
   // UI state
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'both'>(() => {
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-      return 'editor';
-    }
-    return 'both';
-  });
+  const [activeTab, setActiveTab] = useState<'editor' | 'preview' | 'both'>('both');
   const [zoomLevel, setZoomLevel] = useState<number>(100);
   const [autoFitPreview, setAutoFitPreview] = useState<boolean>(true);
   const [calculatedScale, setCalculatedScale] = useState<number>(100);
@@ -943,72 +939,83 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white">
-      {/* 1. TOP APPLICATION BAR */}
+    <div className="min-h-screen bg-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white w-full max-w-full overflow-x-hidden">
+      {/* 1. TOP APPLICATION BAR - Fits every device screen smoothly without horizontal scrolling */}
       <header
         id="app-header"
-        className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs"
+        className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs w-full overflow-x-hidden"
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-          {/* LOGO & TITLE */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-              <Receipt className="w-5 h-5" />
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 w-full">
+          {/* LOGO & TITLE: Compact 2-line brand mark on mobile for optimal horizontal space */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-bold text-slate-900 tracking-tight">
-                  PS Invoice
-                </h1>
-                <span className="hidden sm:inline-flex text-[11px] font-medium bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100">
-                  {t.appBadge}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-500 hidden sm:block">
-                {t.appSubtitle}
-              </p>
+            <div className="flex flex-col leading-none shrink-0">
+              <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
+                PS
+              </span>
+              <span className="text-xs sm:text-sm font-black text-indigo-600 tracking-tight">
+                Invoice
+              </span>
             </div>
+            <span className="hidden md:inline-flex text-[11px] font-medium bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 ml-1">
+              {t.appBadge}
+            </span>
           </div>
 
-          {/* VIEW SWITCHER FOR TABLET & MOBILE */}
-          <div className="flex lg:hidden bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-semibold">
+          {/* VIEW SWITCHER: [ Edit | Both | Preview ] */}
+          <div className="flex bg-slate-100 p-0.5 sm:p-1 rounded-xl border border-slate-200 text-xs font-semibold shrink-0">
             <button
               type="button"
+              id="header-tab-editor"
               onClick={() => setActiveTab('editor')}
-              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer ${
-                activeTab === 'editor' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600'
+              title={t.editTab}
+              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'editor' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>{t.edit}</span>
+              <span className="hidden md:inline">{t.editTab}</span>
             </button>
             <button
               type="button"
+              id="header-tab-both"
+              onClick={() => setActiveTab('both')}
+              title={t.bothTab}
+              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'both' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">{t.bothTab}</span>
+            </button>
+            <button
+              type="button"
+              id="header-tab-preview"
               onClick={() => setActiveTab('preview')}
-              className={`px-2.5 py-1.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer ${
-                activeTab === 'preview' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600'
+              title={t.previewTab}
+              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+                activeTab === 'preview' ? 'bg-white text-indigo-600 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>{t.preview}</span>
+              <span className="hidden md:inline">{t.previewTab}</span>
             </button>
           </div>
 
-          {/* HEADER ACTIONS: LANGUAGE SELECTOR & BUTTONS */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* HEADER ACTIONS: LANGUAGE SELECTOR & DESKTOP BUTTONS */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* LANGUAGE SWITCHER (සිංහල / English) */}
             <div
               id="language-switcher"
-              className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 gap-0.5"
+              className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-xl border border-slate-200 gap-0.5 shrink-0"
             >
-              <div className="pl-1 pr-1 text-slate-400 hidden sm:block">
-                <Languages className="w-3.5 h-3.5" />
-              </div>
               <button
                 type="button"
                 id="lang-btn-sinhala"
                 onClick={() => setLanguage('si')}
-                className={`px-2 sm:px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
                   language === 'si'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -1021,7 +1028,7 @@ export default function App() {
                 type="button"
                 id="lang-btn-english"
                 onClick={() => setLanguage('en')}
-                className={`px-2 sm:px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                className={`px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
                   language === 'en'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -1031,38 +1038,6 @@ export default function App() {
                 English
               </button>
             </div>
-
-            {/* MOBILE ONLY: QUICK PDF BUTTON */}
-            <button
-              type="button"
-              id="btn-export-pdf-mobile"
-              onClick={handleExportPDF}
-              disabled={isExportingPDF}
-              className="lg:hidden inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-              title="PDF"
-            >
-              {isExportingPDF ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <FileDown className="w-3.5 h-3.5" />
-              )}
-              <span>PDF</span>
-            </button>
-
-            {/* MOBILE ONLY: MENU DRAWER TRIGGER */}
-            <button
-              type="button"
-              id="btn-mobile-menu-trigger"
-              onClick={() => setIsMobileDrawerOpen(true)}
-              className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition-colors cursor-pointer shadow-2xs"
-              title={t.mobileMenu}
-            >
-              <Menu className="w-4 h-4 text-slate-700" />
-              <span className="hidden xs:inline">{t.mobileMenu}</span>
-              {driveAccessToken && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white" />
-              )}
-            </button>
 
             {/* GOOGLE DRIVE AUTO-SAVE BUTTON (DESKTOP) */}
             <button
@@ -1355,95 +1330,210 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. SUB-BAR WITH SHORTCUTS & TOTAL SUMMARY */}
-      <div className="no-print bg-white/70 backdrop-blur-xs border-b border-slate-200 px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handleNewInvoice}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer font-medium"
-            >
-              <Plus className="w-3 h-3" />
-              {t.newInvoice}
-            </button>
+      {/* 2. SUB-BAR WITH SHORTCUTS & TOTAL SUMMARY - ZERO HORIZONTAL SCROLL & EXACT ALIGNMENT */}
+      <div className="no-print bg-white/95 backdrop-blur-xs border-b border-slate-200 w-full overflow-x-hidden">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 w-full">
+          {/* MOBILE VIEW (Screens < 768px): Structured 4 clean rows matching exact reference layout */}
+          <div className="flex flex-col gap-2.5 md:hidden w-full">
+            {/* Mobile Row 1: New Invoice, Load Sample, Divider, Save PDF */}
+            <div className="flex items-center justify-between gap-1.5 w-full">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  id="btn-new-invoice"
+                  onClick={handleNewInvoice}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>{t.newInvoice}</span>
+                </button>
 
-            <button
-              type="button"
-              onClick={handleResetSample}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer font-medium"
-            >
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              {t.loadSample}
-            </button>
+                <button
+                  type="button"
+                  id="btn-load-sample"
+                  onClick={handleResetSample}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{t.loadSample}</span>
+                </button>
+              </div>
 
-            <span className="text-slate-300">|</span>
-
-            <button
-              type="button"
-              onClick={handleExportPDF}
-              disabled={isExportingPDF}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors cursor-pointer font-medium disabled:opacity-50"
-              title={t.savePdf}
-            >
-              {isExportingPDF ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <FileDown className="w-3 h-3" />
-              )}
-              <span>{t.savePdf}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md transition-colors cursor-pointer font-medium"
-              title={t.saveExcel}
-            >
-              <FileSpreadsheet className="w-3 h-3 text-emerald-600" />
-              <span>{t.saveExcel}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadJSON}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer font-medium"
-              title={t.backupJson}
-            >
-              <Download className="w-3 h-3" />
-              {t.backupJson}
-            </button>
-
-            <button
-              type="button"
-              id="btn-drive-sync-subbar"
-              onClick={() => {
-                if (!driveAccessToken) setIsDriveModalOpen(true);
-                else handleManualDriveSync();
-              }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-blue-700 bg-blue-50/90 hover:bg-blue-100 border border-blue-200 rounded-md transition-colors cursor-pointer font-medium"
-              title={t.driveAutoSave}
-            >
-              <Cloud className={`w-3 h-3 ${isDriveSyncing ? 'animate-pulse text-blue-600' : 'text-blue-500'}`} />
-              <span>{driveAccessToken ? (isDriveSyncing ? t.driveSyncing : t.driveSyncNow) : t.connectGoogleDrive}</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-4 text-slate-600">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-400">{t.total}:</span>
-              <span className="font-mono font-bold text-slate-900 text-sm">
-                {formatCurrency(totals.grandTotal, invoice.currency)}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  id="btn-save-pdf"
+                  onClick={handleExportPDF}
+                  disabled={isExportingPDF}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                  title={t.savePdf}
+                >
+                  {isExportingPDF ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  <span>{t.savePdf}</span>
+                </button>
+              </div>
             </div>
-            {totals.balanceDue > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400">{t.balanceDue}:</span>
-                <span className="font-mono font-bold text-amber-700">
-                  {formatCurrency(totals.balanceDue, invoice.currency)}
+
+            {/* Mobile Row 2: Save Excel (.xlsx) and Backup JSON */}
+            <div className="flex items-center justify-between gap-2 w-full">
+              <button
+                type="button"
+                id="btn-save-excel"
+                onClick={handleExportExcel}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer"
+                title={t.saveExcel}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Save Excel (.xlsx)</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-backup-json"
+                onClick={handleDownloadJSON}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                title={t.backupJson}
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>{t.backupJson}</span>
+              </button>
+            </div>
+
+            {/* Mobile Row 3: Connect Google Drive */}
+            <div className="flex items-center w-full">
+              <button
+                type="button"
+                id="btn-drive-sync-subbar"
+                onClick={() => {
+                  if (!driveAccessToken) setIsDriveModalOpen(true);
+                  else handleManualDriveSync();
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                title={t.driveAutoSave}
+              >
+                <Cloud className={`w-3.5 h-3.5 ${isDriveSyncing ? 'animate-pulse text-blue-600' : 'text-blue-500'}`} />
+                <span>{driveAccessToken ? (isDriveSyncing ? t.driveSyncing : t.driveSyncNow) : t.connectGoogleDrive}</span>
+              </button>
+            </div>
+
+            {/* Mobile Row 4: Total & Balance Due Summary */}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-200/80 text-xs w-full">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-medium">{t.total}:</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">
+                  {formatCurrency(totals.grandTotal, invoice.currency)}
                 </span>
               </div>
-            )}
+              {totals.balanceDue > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-medium">{t.balanceDue}:</span>
+                  <span className="font-mono font-bold text-amber-700 text-sm">
+                    {formatCurrency(totals.balanceDue, invoice.currency)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* DESKTOP VIEW (Screens >= 768px): Sleek horizontal single-bar */}
+          <div className="hidden md:flex md:items-center md:justify-between gap-4 w-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                id="btn-new-invoice-desktop"
+                onClick={handleNewInvoice}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{t.newInvoice}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-load-sample-desktop"
+                onClick={handleResetSample}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>{t.loadSample}</span>
+              </button>
+
+              <span className="text-slate-300">|</span>
+
+              <button
+                type="button"
+                id="btn-save-pdf-desktop"
+                onClick={handleExportPDF}
+                disabled={isExportingPDF}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                title={t.savePdf}
+              >
+                {isExportingPDF ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FileDown className="w-3.5 h-3.5" />
+                )}
+                <span>{t.savePdf}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-save-excel-desktop"
+                onClick={handleExportExcel}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer"
+                title={t.saveExcel}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Save Excel (.xlsx)</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-backup-json-desktop"
+                onClick={handleDownloadJSON}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:text-indigo-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                title={t.backupJson}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{t.backupJson}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-drive-sync-subbar-desktop"
+                onClick={() => {
+                  if (!driveAccessToken) setIsDriveModalOpen(true);
+                  else handleManualDriveSync();
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50/90 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer"
+                title={t.driveAutoSave}
+              >
+                <Cloud className={`w-3.5 h-3.5 ${isDriveSyncing ? 'animate-pulse text-blue-600' : 'text-blue-500'}`} />
+                <span>{driveAccessToken ? (isDriveSyncing ? t.driveSyncing : t.driveSyncNow) : t.connectGoogleDrive}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-6 text-xs sm:text-sm">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-medium">{t.total}:</span>
+                <span className="font-mono font-bold text-slate-900 text-sm sm:text-base">
+                  {formatCurrency(totals.grandTotal, invoice.currency)}
+                </span>
+              </div>
+              {totals.balanceDue > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400 font-medium">{t.balanceDue}:</span>
+                  <span className="font-mono font-bold text-amber-700 text-sm sm:text-base">
+                    {formatCurrency(totals.balanceDue, invoice.currency)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1455,7 +1545,7 @@ export default function App() {
           <div
             id="editor-panel"
             className={`no-print ${
-              activeTab === 'preview' ? 'hidden lg:block lg:col-span-6' : 'col-span-12 lg:col-span-6'
+              activeTab === 'preview' ? 'hidden' : activeTab === 'editor' ? 'col-span-12' : 'col-span-12 lg:col-span-6'
             }`}
           >
             <div className="mb-3 sm:mb-4 flex items-center justify-between">
@@ -1484,8 +1574,9 @@ export default function App() {
 
           {/* RIGHT: LIVE PREVIEW PANEL */}
           <div
+            id="preview-panel"
             className={`${
-              activeTab === 'editor' ? 'hidden lg:block lg:col-span-6' : 'col-span-12 lg:col-span-6'
+              activeTab === 'editor' ? 'hidden' : activeTab === 'preview' ? 'col-span-12' : 'col-span-12 lg:col-span-6'
             }`}
           >
             {/* PREVIEW TOOLBAR WITH AUTO-FIT FOR PHONE & TABLET */}
@@ -1620,27 +1711,42 @@ export default function App() {
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
           <button
             type="button"
+            id="mobile-tab-editor"
             onClick={() => setActiveTab('editor')}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
               activeTab === 'editor'
                 ? 'bg-indigo-600 text-white shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Edit3 className="w-3.5 h-3.5" />
-            <span>{t.edit}</span>
+            <span>{t.editTab}</span>
           </button>
           <button
             type="button"
+            id="mobile-tab-both"
+            onClick={() => setActiveTab('both')}
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
+              activeTab === 'both'
+                ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Columns className="w-3.5 h-3.5" />
+            <span>{t.bothTab}</span>
+          </button>
+          <button
+            type="button"
+            id="mobile-tab-preview"
             onClick={() => setActiveTab('preview')}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all cursor-pointer ${
               activeTab === 'preview'
                 ? 'bg-indigo-600 text-white shadow-xs font-bold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>{t.preview}</span>
+            <span>{t.previewTab}</span>
           </button>
         </div>
 

@@ -111,83 +111,109 @@ export function exportInvoiceToExcel(invoice: Invoice): void {
 }
 
 /**
- * Exports invoice element (#invoice-paper) directly into a downloadable PDF
+ * Safely captures the rendered invoice to a high-resolution HTML Canvas.
+ * Uses an isolated sandbox clone attached to document.body to guarantee
+ * full 800px layout recalculation and non-zero dimensions even when the live
+ * preview tab is inactive or hidden on mobile devices.
  */
-export async function exportInvoiceToPDF(invoice: Invoice): Promise<void> {
-  const paperElement = document.getElementById('invoice-paper');
+async function captureInvoiceCanvas(): Promise<HTMLCanvasElement> {
+  let paperElement = document.getElementById('invoice-paper');
   if (!paperElement) {
-    // Fallback to browser print if element not found
-    window.print();
-    return;
+    // Grace period in case component is currently mounting
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    paperElement = document.getElementById('invoice-paper');
   }
 
-  // Create clone or temporarily reset zoom transform to capture pristine scale
-  const originalTransform = paperElement.style.transform;
-  paperElement.style.transform = 'none';
+  if (!paperElement) {
+    throw new Error('Invoice preview element (#invoice-paper) not found in DOM.');
+  }
+
+  // Strategy 1: Isolated Sandbox Clone
+  // Bypasses parent tab display:none, viewport shrinkage, zoom scaling, and scroll transforms
+  const sandbox = document.createElement('div');
+  sandbox.id = 'invoice-export-sandbox';
+  sandbox.setAttribute('aria-hidden', 'true');
+  sandbox.style.cssText = [
+    'position: fixed !important;',
+    'top: 0 !important;',
+    'left: 0 !important;',
+    'width: 800px !important;',
+    'min-width: 800px !important;',
+    'max-width: 800px !important;',
+    'margin: 0 !important;',
+    'padding: 0 !important;',
+    'z-index: -99999 !important;',
+    'background-color: #ffffff !important;',
+    'opacity: 1 !important;',
+    'pointer-events: none !important;',
+    'overflow: visible !important;',
+  ].join(' ');
+
+  const clone = paperElement.cloneNode(true) as HTMLElement;
+  clone.id = 'invoice-paper-export-clone';
+  clone.style.cssText = [
+    'transform: none !important;',
+    '-webkit-transform: none !important;',
+    'width: 800px !important;',
+    'min-width: 800px !important;',
+    'max-width: 800px !important;',
+    'margin: 0 !important;',
+    'box-shadow: none !important;',
+    'display: flex !important;',
+    'flex-direction: column !important;',
+    'visibility: visible !important;',
+    'opacity: 1 !important;',
+    'background-color: #ffffff !important;',
+  ].join(' ');
+
+  sandbox.appendChild(clone);
+  document.body.appendChild(sandbox);
 
   try {
-    const canvas = await html2canvas(paperElement, {
-      scale: 2, // High resolution for sharp text and borders
+    // Wait for any cloned images (logos, signature) to complete loading
+    const images = Array.from(clone.querySelectorAll('img'));
+    if (images.length > 0) {
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+            setTimeout(resolve, 800);
+          });
+        })
+      );
+    }
+
+    // Wait for document fonts if supported
+    if (document.fonts && typeof document.fonts.ready !== 'undefined') {
+      await document.fonts.ready.catch(() => {});
+    }
+
+    // Small delay to allow browser layout engine to paint clone
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const canvas = await html2canvas(clone, {
+      scale: 2, // 2x resolution for sharp borders and text
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
-      windowWidth: 1000,
+      width: 800,
+      windowWidth: 1200,
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-
-    // Standard A4 dimensions in mm: 210 x 297
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
-
-    // Calculate proportional height
-    const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-    // Center or top-align on A4
-    if (imgHeight <= pdfHeight) {
-      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
-    } else {
-      // If content spans multiple pages
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
+    if (canvas && canvas.width > 0 && canvas.height > 0) {
+      return canvas;
     }
-
-    const fileName = `${invoice.invoiceNumber || 'Invoice'}.pdf`;
-    pdf.save(fileName);
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    throw error;
+  } catch (cloneErr) {
+    console.warn('Sandbox clone capture failed, attempting direct capture:', cloneErr);
   } finally {
-    paperElement.style.transform = originalTransform;
-  }
-}
-
-/**
- * Generates an in-memory PDF Blob from the rendered invoice
- */
-export async function generateInvoicePDFBlob(invoice: Invoice): Promise<Blob> {
-  const paperElement = document.getElementById('invoice-paper');
-  if (!paperElement) {
-    throw new Error('Invoice preview element not found');
+    if (sandbox.parentNode) {
+      sandbox.parentNode.removeChild(sandbox);
+    }
   }
 
+  // Strategy 2: Direct capture fallback if sandbox fails
   const originalTransform = paperElement.style.transform;
   paperElement.style.transform = 'none';
 
@@ -197,9 +223,75 @@ export async function generateInvoicePDFBlob(invoice: Invoice): Promise<Blob> {
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
-      windowWidth: 1000,
+      windowWidth: 1200,
     });
 
+    if (!canvas || canvas.width <= 0 || canvas.height <= 0) {
+      throw new Error(`Invalid canvas rendered (${canvas?.width}x${canvas?.height})`);
+    }
+
+    return canvas;
+  } finally {
+    paperElement.style.transform = originalTransform;
+  }
+}
+
+/**
+ * Exports invoice element directly into a downloadable A4 PDF document
+ */
+export async function exportInvoiceToPDF(invoice: Invoice): Promise<void> {
+  try {
+    const canvas = await captureInvoiceCanvas();
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    // Standard A4 dimensions in mm: 210 x 297
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    // Strictly validate dimensions as valid finite numbers
+    const pdfWidth = Number(pdf.internal.pageSize.getWidth()) || 210;
+    const pdfHeight = Number(pdf.internal.pageSize.getHeight()) || 297;
+
+    const imgWidth = pdfWidth;
+    const calculatedHeight = (canvas.height * pdfWidth) / (canvas.width || 1);
+    const imgHeight = !isFinite(calculatedHeight) || isNaN(calculatedHeight) || calculatedHeight <= 0
+      ? pdfHeight
+      : Number(calculatedHeight.toFixed(2));
+
+    if (imgHeight <= pdfHeight) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+    } else {
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, Number(position.toFixed(2)), imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, Number(position.toFixed(2)), imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+    }
+
+    const fileName = `${invoice.invoiceNumber || 'Invoice'}.pdf`;
+    pdf.save(fileName);
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generates an in-memory PDF Blob from the rendered invoice (for Cloud / Drive sync)
+ */
+export async function generateInvoicePDFBlob(invoice: Invoice): Promise<Blob> {
+  try {
+    const canvas = await captureInvoiceCanvas();
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
     const pdf = new jsPDF({
@@ -208,23 +300,28 @@ export async function generateInvoicePDFBlob(invoice: Invoice): Promise<Blob> {
       format: 'a4',
     });
 
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const pdfWidth = Number(pdf.internal.pageSize.getWidth()) || 210;
+    const pdfHeight = Number(pdf.internal.pageSize.getHeight()) || 297;
+
     const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    const calculatedHeight = (canvas.height * pdfWidth) / (canvas.width || 1);
+    const imgHeight = !isFinite(calculatedHeight) || isNaN(calculatedHeight) || calculatedHeight <= 0
+      ? pdfHeight
+      : Number(calculatedHeight.toFixed(2));
 
     if (imgHeight <= pdfHeight) {
       pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
     } else {
       let heightLeft = imgHeight;
       let position = 0;
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+
+      pdf.addImage(imgData, 'JPEG', 0, Number(position.toFixed(2)), imgWidth, imgHeight);
       heightLeft -= pdfHeight;
 
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, Number(position.toFixed(2)), imgWidth, imgHeight);
         heightLeft -= pdfHeight;
       }
     }
@@ -233,8 +330,6 @@ export async function generateInvoicePDFBlob(invoice: Invoice): Promise<Blob> {
   } catch (error) {
     console.error('Error creating PDF Blob:', error);
     throw error;
-  } finally {
-    paperElement.style.transform = originalTransform;
   }
 }
 

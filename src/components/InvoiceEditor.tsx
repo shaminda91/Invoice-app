@@ -101,7 +101,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       />
 
       {/* 2. INVOICE META & NUMBER */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Hash className="w-4 h-4 text-indigo-600" />
@@ -153,9 +153,9 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       </div>
 
       {/* 3. SENDER (YOUR BUSINESS) & CLIENT (RECIPIENT) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* SENDER DETAILS */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3.5">
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-3.5">
           <div className="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-indigo-600" />
@@ -299,8 +299,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="min-w-0">
               <label className="block text-[11px] font-medium text-slate-500 mb-1">{t.city}</label>
               <input
                 type="text"
@@ -310,7 +310,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-[11px] font-medium text-slate-500 mb-1">{t.postalCode}</label>
               <input
                 type="text"
@@ -320,7 +320,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-[11px] font-medium text-slate-500 mb-1">{t.country}</label>
               <input
                 type="text"
@@ -359,7 +359,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
         </div>
 
         {/* CLIENT DETAILS */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-3.5">
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-3.5">
           <div className="flex items-center justify-between gap-2 flex-wrap pb-1 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-blue-600" />
@@ -479,8 +479,8 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="min-w-0">
               <label className="block text-[11px] font-medium text-slate-500 mb-1">{t.city}</label>
               <input
                 type="text"
@@ -490,7 +490,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-[11px] font-medium text-slate-500 mb-1">{t.postalCode}</label>
               <input
                 type="text"
@@ -500,7 +500,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
                 className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-[11px] font-medium text-slate-500 mb-1">{t.country}</label>
               <input
                 type="text"
@@ -542,7 +542,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       </div>
 
       {/* 4. LINE ITEMS SECTION */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs">
         <LineItemsEditor
           items={invoice.items}
           currency={invoice.currency}
@@ -552,7 +552,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       </div>
 
       {/* 5. TAX, DISCOUNT, SHIPPING & PAYMENTS */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-4">
         <div className="flex items-center gap-2">
           <DollarSign className="w-4 h-4 text-indigo-600" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -669,7 +669,7 @@ export const InvoiceEditor: React.FC<InvoiceEditorProps> = ({
       </div>
 
       {/* 6. NOTES, TERMS & SIGNATURE */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-4">
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-4">
         <div className="flex items-center gap-2">
           <PenTool className="w-4 h-4 text-indigo-600" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
