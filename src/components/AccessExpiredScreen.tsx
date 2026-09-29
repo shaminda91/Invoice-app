@@ -93,6 +93,10 @@ export function AccessExpiredScreen({
                   ? isBlocked
                     ? 'ප්‍රවේශය අවහිර කර ඇත (Access Blocked)'
                     : `ප්‍රවේශ කාලය (දින ${allowedDays}) අවසන් වී ඇත`
+                  : language === 'ta'
+                  ? isBlocked
+                    ? 'அணுகல் தடுக்கப்பட்டுள்ளது (Access Blocked)'
+                    : `அணுகல் காலம் (${allowedDays} நாட்கள்) முடிவடைந்தது`
                   : isBlocked
                   ? 'Access Restricted by Admin'
                   : `Access Period (${allowedDays} Days) Expired`}
@@ -102,6 +106,8 @@ export function AccessExpiredScreen({
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               {language === 'si'
                 ? 'ඔබගේ ගිණුම යාවත්කාලීන කරන්න'
+                : language === 'ta'
+                ? 'கணக்கைப் புதுப்பிக்க வேண்டும்'
                 : 'Account Renewal Required'}
             </h1>
 
@@ -112,6 +118,13 @@ export function AccessExpiredScreen({
                   නැවත ඉන්වොයිස් සැකසීම හා භාවිතය සඳහා කරුණාකර පරිපාලක (
                   <span className="text-indigo-300 font-mono font-bold">{ADMIN_EMAIL}</span>
                   ) අමතා ඔබගේ ප්‍රවේශය යාවත්කාලීන (Renew) කරගන්න.
+                </>
+              ) : language === 'ta' ? (
+                <>
+                  PSN Invoice க்கான உங்கள் {allowedDays} நாட்கள் சோதனைக் காலம் முடிந்துவிட்டது.
+                  மீண்டும் விலைப்பட்டியல்களை உருவாக்க மற்றும் அணுகலைப் புதுப்பிக்க நிர்வாகியை (
+                  <span className="text-indigo-300 font-mono font-bold">{ADMIN_EMAIL}</span>
+                  ) தொடர்பு கொள்ளவும்.
                 </>
               ) : (
                 <>
@@ -157,6 +170,8 @@ export function AccessExpiredScreen({
               <span>
                 {language === 'si'
                   ? 'පරිපාලක වෙත ඊමේල් පණිවිඩයක් යවන්න (Email Admin to Renew)'
+                  : language === 'ta'
+                  ? 'புதுப்பிக்க நிர்வாகிக்கு மின்னஞ்சல் அனுப்பவும்'
                   : 'Email Admin (psgss91@gmail.com) to Renew'}
               </span>
               <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
@@ -172,7 +187,11 @@ export function AccessExpiredScreen({
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
                 <span>
-                  {language === 'si' ? 'යාවත්කාලීන බව පරීක්ෂා කරන්න' : 'Check Updated Status'}
+                  {language === 'si'
+                    ? 'යාවත්කාලීන බව පරීක්ෂා කරන්න'
+                    : language === 'ta'
+                    ? 'நிலையை சரிபார்க்கவும்'
+                    : 'Check Updated Status'}
                 </span>
               </button>
 
@@ -203,6 +222,8 @@ export function AccessExpiredScreen({
               <span>
                 {language === 'si'
                   ? 'ගිණුමෙන් ඉවත් වී වෙනත් ගිණුමකින් පිවිසෙන්න'
+                  : language === 'ta'
+                  ? 'வெளியேறி வேறு கணக்கு மூலம் உள்நுழைக'
                   : 'Sign out and use another account'}
               </span>
             </button>

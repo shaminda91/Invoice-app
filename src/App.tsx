@@ -77,7 +77,7 @@ export default function App() {
   const [language, setLanguage] = useState<AppLanguage>(() => {
     try {
       const savedLang = localStorage.getItem(STORAGE_KEY_LANG) as AppLanguage;
-      if (savedLang === 'en' || savedLang === 'si') return savedLang;
+      if (savedLang === 'en' || savedLang === 'si' || savedLang === 'ta') return savedLang;
     } catch (e) {
       console.error('Failed to load language', e);
     }
@@ -453,7 +453,13 @@ export default function App() {
     }
 
     setIsCloudSyncing(true);
-    showToast(language === 'si' ? 'සියලු දත්ත Cloud Server වෙත සුරැකෙමින් පවතී...' : 'Syncing all data to psgss91@gmail.com Cloud Server...');
+    showToast(
+      language === 'si'
+        ? 'සියලු දත්ත Cloud Server වෙත සුරැකෙමින් පවතී...'
+        : language === 'ta'
+        ? 'அனைத்து தரவுகளும் கிளவுட் சர்வருக்கு ஒத்திசைக்கப்படுகின்றன...'
+        : 'Syncing all data to psgss91@gmail.com Cloud Server...'
+    );
     try {
       const snapshot: FullAppDataSnapshot = {
         metadata: {
@@ -501,7 +507,13 @@ export default function App() {
     }
 
     setIsCloudSyncing(true);
-    showToast(language === 'si' ? 'Cloud Server වෙතින් දත්ත ලබාගනිමින් පවතී...' : 'Updating app from psgss91@gmail.com Cloud Server...');
+    showToast(
+      language === 'si'
+        ? 'Cloud Server වෙතින් දත්ත ලබාගනිමින් පවතී...'
+        : language === 'ta'
+        ? 'கிளவுட் சர்வரிலிருந்து பயன்பாடு புதுப்பிக்கப்படுகிறது...'
+        : 'Updating app from psgss91@gmail.com Cloud Server...'
+    );
     try {
       const { snapshot } = await fetchFullAppFromCloudServer(driveAccessToken);
       if (!snapshot) {
@@ -1006,7 +1018,7 @@ export default function App() {
 
           {/* HEADER ACTIONS: LANGUAGE SELECTOR & DESKTOP BUTTONS */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {/* LANGUAGE SWITCHER (සිංහල / English) */}
+            {/* LANGUAGE SWITCHER (සිංහල / English / தமிழ்) */}
             <div
               id="language-switcher"
               className="flex items-center bg-slate-100 p-0.5 sm:p-1 rounded-xl border border-slate-200 gap-0.5 shrink-0"
@@ -1015,7 +1027,7 @@ export default function App() {
                 type="button"
                 id="lang-btn-sinhala"
                 onClick={() => setLanguage('si')}
-                className={`px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                className={`px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
                   language === 'si'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -1028,7 +1040,7 @@ export default function App() {
                 type="button"
                 id="lang-btn-english"
                 onClick={() => setLanguage('en')}
-                className={`px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                className={`px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
                   language === 'en'
                     ? 'bg-indigo-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -1036,6 +1048,19 @@ export default function App() {
                 title="Select English"
               >
                 English
+              </button>
+              <button
+                type="button"
+                id="lang-btn-tamil"
+                onClick={() => setLanguage('ta')}
+                className={`px-1.5 sm:px-2.5 py-1 text-[11px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  language === 'ta'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+                title="தமிழைத் தேர்ந்தெடுக்கவும்"
+              >
+                தமிழ்
               </button>
             </div>
 
@@ -1291,7 +1316,11 @@ export default function App() {
                   <LogIn className="w-3.5 h-3.5 text-indigo-600" />
                 )}
                 <span>
-                  {language === 'si' ? 'Gmail මගින් පිවිසෙන්න' : 'Sign In'}
+                  {language === 'si'
+                    ? 'Gmail මගින් පිවිසෙන්න'
+                    : language === 'ta'
+                    ? 'Gmail மூலம் உள்நுழைக'
+                    : 'Sign In'}
                 </span>
               </button>
             )}
@@ -1305,11 +1334,17 @@ export default function App() {
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[10px] uppercase">
-                {language === 'si' ? 'ආගන්තුක මාදිලිය' : 'Guest Mode'}
+                {language === 'si'
+                  ? 'ආගන්තුක මාදිලිය'
+                  : language === 'ta'
+                  ? 'விருந்தினர் முறை'
+                  : 'Guest Mode'}
               </span>
               <span>
                 {language === 'si'
                   ? 'Google Drive Cloud Auto-Save සහ ගිණුම් විස්තර සඳහා ඔබගේ Gmail මඟින් පිවිසෙන්න.'
+                  : language === 'ta'
+                  ? 'Google Drive Cloud Auto-Save மற்றும் கணக்கு விவரங்களுக்கு உங்கள் Gmail மூலம் உள்நுழையவும்.'
                   : 'Sign in with your Gmail to enable Google Drive Cloud Auto-Save and session sync.'}
               </span>
             </div>
@@ -1324,7 +1359,13 @@ export default function App() {
               ) : (
                 <LogIn className="w-3 h-3" />
               )}
-              <span>{language === 'si' ? 'Gmail මගින් පිවිසෙන්න' : 'Sign in with Google'}</span>
+              <span>
+                {language === 'si'
+                  ? 'Gmail මගින් පිවිසෙන්න'
+                  : language === 'ta'
+                  ? 'Gmail மூலம் உள்நுழைக'
+                  : 'Sign in with Google'}
+              </span>
             </button>
           </div>
         </div>

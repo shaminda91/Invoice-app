@@ -68,7 +68,7 @@ export function LoginPage({
           <button
             type="button"
             onClick={() => onLanguageChange('si')}
-            className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               language === 'si'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white'
@@ -79,13 +79,24 @@ export function LoginPage({
           <button
             type="button"
             onClick={() => onLanguageChange('en')}
-            className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
               language === 'en'
                 ? 'bg-indigo-600 text-white shadow-xs'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             English
+          </button>
+          <button
+            type="button"
+            onClick={() => onLanguageChange('ta')}
+            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              language === 'ta'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            தமிழ்
           </button>
         </div>
       </header>
@@ -166,11 +177,17 @@ export function LoginPage({
               <Receipt className="w-7 h-7" />
             </div>
             <h2 className="text-xl font-bold text-white">
-              {language === 'si' ? 'ගිණුමට පිවිසෙන්න' : 'Sign in to PSN Invoice'}
+              {language === 'si'
+                ? 'ගිණුමට පිවිසෙන්න'
+                : language === 'ta'
+                ? 'கணக்கில் உள்நுழைக'
+                : 'Sign in to PSN Invoice'}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
               {language === 'si'
                 ? 'ඔබගේ Gmail / Google ගිණුම මගින් තත්පරයකින් ඇතුල් වන්න'
+                : language === 'ta'
+                ? 'உங்கள் Gmail / Google கணக்கு மூலம் பாதுகாப்பாக உள்நுழையுங்கள்'
                 : 'Authenticate securely using your Google (Gmail) account'}
             </p>
           </div>
@@ -220,6 +237,8 @@ export function LoginPage({
                 <span>
                   {language === 'si'
                     ? 'Gmail ගිණුමෙන් පිවිසෙන්න'
+                    : language === 'ta'
+                    ? 'Gmail கணக்கு மூலம் உள்நுழைக'
                     : 'Sign in with Google (Gmail)'}
                 </span>
                 <ArrowRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
@@ -234,7 +253,7 @@ export function LoginPage({
             </div>
             <div className="relative flex justify-center text-[11px] uppercase">
               <span className="bg-slate-800 px-3 text-slate-400">
-                {language === 'si' ? 'හෝ' : 'or'}
+                {language === 'si' ? 'හෝ' : language === 'ta' ? 'அல்லது' : 'or'}
               </span>
             </div>
           </div>
@@ -262,6 +281,14 @@ export function LoginPage({
                     </span>
                     . සියලුම පිවිසුම් තොරතුරු පරිපාලක වෙත වාර්තා වේ.
                   </>
+                ) : language === 'ta' ? (
+                  <>
+                    நிர்வாகி கணக்கு:{' '}
+                    <span className="text-indigo-300 font-mono font-semibold">
+                      {ADMIN_EMAIL}
+                    </span>
+                    . அனைத்து உள்நுழைவுகளும் நிர்வாகியிடம் பதிவு செய்யப்படுகின்றன.
+                  </>
                 ) : (
                   <>
                     System Admin:{' '}
@@ -276,10 +303,18 @@ export function LoginPage({
 
             <div className="bg-slate-900/50 border border-slate-700/50 rounded-lg p-2.5 flex items-center justify-between text-[11px]">
               <span className="text-slate-300">
-                {language === 'si' ? 'නව පරිශීලක ප්‍රවේශය:' : 'New user access:'}
+                {language === 'si'
+                  ? 'නව පරිශීලක ප්‍රවේශය:'
+                  : language === 'ta'
+                  ? 'புதிய பயனர் அணுகல்:'
+                  : 'New user access:'}
               </span>
               <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                {language === 'si' ? 'දින 7 ක අත්හදා බැලීමක්' : '7 Days Trial Access'}
+                {language === 'si'
+                  ? 'දින 7 ක අත්හදා බැලීමක්'
+                  : language === 'ta'
+                  ? '7 நாட்கள் இலவச சோதனை'
+                  : '7 Days Trial Access'}
               </span>
             </div>
           </div>

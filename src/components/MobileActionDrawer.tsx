@@ -1,5 +1,5 @@
 import React from 'react';
-import { Translations } from '../i18n/translations';
+import { Translations, AppLanguage } from '../i18n/translations';
 import {
   X,
   FileDown,
@@ -29,8 +29,8 @@ interface MobileActionDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   t: Translations;
-  language: 'en' | 'si';
-  onSetLanguage: (lang: 'en' | 'si') => void;
+  language: AppLanguage;
+  onSetLanguage: (lang: AppLanguage) => void;
   // User & Access
   googleUser: any;
   accessCheck: {
@@ -139,13 +139,13 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
             {/* 1. LANGUAGE SELECTOR */}
             <div className="pb-1">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                Language / භාෂාව
+                Language / භාෂාව / மொழி
               </label>
-              <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button
                   type="button"
                   onClick={() => onSetLanguage('si')}
-                  className={`py-2 px-3 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2 px-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
                     language === 'si'
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -157,7 +157,7 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
                 <button
                   type="button"
                   onClick={() => onSetLanguage('en')}
-                  className={`py-2 px-3 text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`py-2 px-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
                     language === 'en'
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -165,6 +165,18 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
                 >
                   <Languages className="w-3.5 h-3.5" />
                   <span>English</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSetLanguage('ta')}
+                  className={`py-2 px-2 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                    language === 'ta'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Languages className="w-3.5 h-3.5" />
+                  <span>தமிழ்</span>
                 </button>
               </div>
             </div>
@@ -235,7 +247,13 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
-                  <span>{language === 'si' ? 'Gmail මගින් පිවිසෙන්න' : 'Sign in with Google'}</span>
+                  <span>
+                    {language === 'si'
+                      ? 'Gmail මගින් පිවිසෙන්න'
+                      : language === 'ta'
+                      ? 'Gmail மூலம் உள்நுழைக'
+                      : 'Sign in with Google'}
+                  </span>
                 </button>
               )}
             </div>
