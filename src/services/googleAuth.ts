@@ -11,9 +11,27 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+const registerFirestoreUser = async (user: User) => {
+  if (!user.uid || !user.email) return;
+
+  const isAdmin = user.email.trim().toLowerCase() === 'psgss91@gmail.com';
+
+  await setDoc(doc(db, 'users', user.uid), {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName || 'Google User',
+    role: isAdmin ? 'admin' : 'user',
+    ownerEmail: 'psgss91@gmail.com',
+    lastLoginAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+};
 
 export const DRIVE_SCOPES = [
   'https://www.googleapis.com/auth/drive.file',
@@ -56,6 +74,12 @@ export const initAuth = (
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
+      try {
+        await registerFirestoreUser(user);
+      } catch (error) {
+        console.error('Firestore user registration failed:', error);
+      }
+
       if (cachedAccessToken && Date.now() < tokenExpiryTime) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else {
