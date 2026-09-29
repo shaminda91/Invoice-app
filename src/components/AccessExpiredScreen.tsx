@@ -4,6 +4,8 @@ import { Translations, AppLanguage } from '../i18n/translations';
 import {
   createRenewalMailtoLink,
   createApprovalRequestMailtoLink,
+  createRenewalGmailLink,
+  createApprovalRequestGmailLink,
 } from '../services/userAccessManager';
 import { submitApprovalRequest } from '../services/superAdminApi';
 import { submitApprovalRequestToFirestore } from '../services/googleAuth';
@@ -84,6 +86,8 @@ export function AccessExpiredScreen({
     return () => clearInterval(interval);
   }, [onRefreshStatus]);
 
+  const [isEmailSending, setIsEmailSending] = useState(false);
+
   const handleSendInAppRequest = async () => {
     if (isSendingRequest) return;
     setIsSendingRequest(true);
@@ -130,6 +134,57 @@ export function AccessExpiredScreen({
       setIsSendingRequest(false);
       onRefreshStatus();
     }
+  };
+
+  const handleEmailAdminApproval = async (mode: 'gmail' | 'mailto' = 'gmail') => {
+    if (isEmailSending) return;
+    setIsEmailSending(true);
+    setRequestStatusMessage(null);
+
+    const userPayload = {
+      uid: profile?.userId || `user_${Date.now()}`,
+      email: userEmail,
+      displayName: userName || profile?.displayName || userEmail.split('@')[0],
+      photoURL: profile?.photoURL,
+    };
+
+    try {
+      // 1. Immediately register request on Central Server & Firestore so Admin sees it in real-time
+      await Promise.allSettled([
+        submitApprovalRequest(userPayload, 'User submitted Email Approval Request'),
+        submitApprovalRequestToFirestore(userPayload),
+      ]);
+      setRequestSentSuccess(true);
+    } catch (e) {
+      console.warn('Error saving approval request:', e);
+    } finally {
+      setIsEmailSending(false);
+      onRefreshStatus();
+    }
+
+    // 2. Open Gmail Web or native mail client
+    const targetGmailUrl = isPending
+      ? createApprovalRequestGmailLink(profile, userEmail)
+      : createRenewalGmailLink(profile, userEmail);
+
+    if (mode === 'mailto') {
+      window.location.href = mailtoUrl;
+    } else {
+      const opened = window.open(targetGmailUrl, '_blank', 'noopener,noreferrer');
+      if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+        // Fallback to mailto link if popup was blocked
+        window.location.href = mailtoUrl;
+      }
+    }
+
+    // 3. Reassuring status message for user
+    setRequestStatusMessage(
+      language === 'si'
+        ? `✓ ඔබගේ ඉල්ලීම ප්‍රධාන පරිපාලක (${ADMIN_EMAIL}) වෙත සාර්ථකව ලැබී ඇත! විවෘත වූ Gmail/Email පණිවිඩය Send කරන්න. පරිපාලක අනුමත කළ විගස මෙම තිරය ස්වයංක්‍රීයව අගුළු හැරේ.`
+        : language === 'ta'
+        ? `✓ உங்கள் அனுமதி கோரிக்கை முதன்மை நிர்வாகிக்கு (${ADMIN_EMAIL}) அனுப்பப்பட்டது! ஜிமெயில்/மின்னஞ்சல் வழியே அனுப்பவும்.`
+        : `✓ Your approval request was submitted to Super Admin (${ADMIN_EMAIL})! Please click Send in Gmail/Email. System will auto-unlock once approved.`
+    );
   };
 
   const mailtoUrl = isPending
@@ -366,7 +421,63 @@ export function AccessExpiredScreen({
               </button>
             )}
 
-            {/* 2. Secondary WhatsApp Action */}
+            {/* 2. Interactive Email Action (Submits request to Admin database + opens Gmail Web / Mail App) */}
+            <div className="bg-slate-900/70 border border-slate-700/80 rounded-xl p-3 space-y-2.5 text-left">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-indigo-300 flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-indigo-400" />
+                  {language === 'si'
+                    ? 'පරිපාලක වෙත ඊමේල් ඉල්ලීම'
+                    : 'Email Request to Admin'}
+                </span>
+                <span className="text-[11px] font-mono text-slate-400 truncate max-w-[160px]">
+                  {ADMIN_EMAIL}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleEmailAdminApproval('gmail')}
+                disabled={isEmailSending}
+                className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 via-indigo-700 to-indigo-800 hover:from-indigo-500 hover:to-indigo-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-indigo-950/40 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 active:scale-[0.99] group"
+              >
+                {isEmailSending ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>
+                      {language === 'si'
+                        ? 'ඉල්ලීම සටහන් කර Gmail විවෘත කරමින්...'
+                        : 'Recording & Opening Gmail...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4 text-indigo-300 group-hover:scale-110 transition-transform" />
+                    <span>
+                      {language === 'si'
+                        ? '✉️ පරිපාලක වෙත ඊමේල් ඉල්ලීමක් යවන්න (Email Admin to Approve)'
+                        : `✉️ Email Admin to Approve (${ADMIN_EMAIL})`}
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                  </>
+                )}
+              </button>
+
+              <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 pt-0.5">
+                <span className="text-slate-400">
+                  {language === 'si' ? 'Gmail හරහා විවෘත වේ' : 'Opens in Gmail Web'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleEmailAdminApproval('mailto')}
+                  className="text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                >
+                  {language === 'si' ? 'Default Mail App මගින්' : 'Open in Default Mail App'}
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Secondary WhatsApp Action */}
             <a
               href={whatsappUrl}
               target="_blank"
@@ -378,20 +489,6 @@ export function AccessExpiredScreen({
                 {language === 'si'
                   ? '💬 WhatsApp මගින් පරිපාලක අමතන්න (WhatsApp Admin)'
                   : '💬 Chat with Admin on WhatsApp'}
-              </span>
-              <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
-            </a>
-
-            {/* 3. Alternative Email Action */}
-            <a
-              href={mailtoUrl}
-              className="w-full py-2.5 px-4 bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs sm:text-sm rounded-xl transition-all border border-slate-600/50 flex items-center justify-center gap-2 cursor-pointer group"
-            >
-              <Mail className="w-4 h-4 text-indigo-400" />
-              <span>
-                {language === 'si'
-                  ? '✉️ ඊමේල් පණිවිඩයක් යවන්න (Email Admin)'
-                  : `✉️ Email Admin (${ADMIN_EMAIL})`}
               </span>
               <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
             </a>

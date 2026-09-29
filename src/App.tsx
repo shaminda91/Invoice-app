@@ -237,6 +237,7 @@ export default function App() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isAdminLogsModalOpen, setIsAdminLogsModalOpen] = useState<boolean>(false);
   const [adminModalTab, setAdminModalTab] = useState<'users' | 'logs' | 'cloud'>('users');
+  const [adminModalRoleFilter, setAdminModalRoleFilter] = useState<string>('all');
   const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
   const [lastCloudSync, setLastCloudSync] = useState<CloudSyncSummary | null>(() => getStoredCloudSyncMeta());
   const [accessRefreshCounter, setAccessRefreshCounter] = useState<number>(0);
@@ -296,6 +297,13 @@ export default function App() {
     };
   }, []);
 
+  // Immediate fetch on application mount so server database profiles are loaded
+  useEffect(() => {
+    fetchServerUsers().then(() => {
+      setAccessRefreshCounter((c) => c + 1);
+    }).catch(() => {});
+  }, []);
+
   // Periodically poll server database for pending registrations if logged in as Super Admin
   useEffect(() => {
     if (!googleUser || googleUser.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
@@ -306,7 +314,7 @@ export default function App() {
       fetchServerUsers().then(() => {
         setAccessRefreshCounter((c) => c + 1);
       }).catch(() => {});
-    }, 8000);
+    }, 3500);
 
     return () => clearInterval(pollInterval);
   }, [googleUser]);
@@ -1493,6 +1501,7 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     setAdminModalTab('users');
+                    setAdminModalRoleFilter('pending');
                     setIsAdminLogsModalOpen(true);
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-black text-[11px] transition-colors cursor-pointer shadow-xs animate-bounce"
@@ -2168,6 +2177,7 @@ export default function App() {
         onRecordsUpdated={(updated) => setLoginRecords(updated)}
         t={t}
         initialTab={adminModalTab}
+        initialRoleFilter={adminModalRoleFilter}
         user={googleUser}
         driveAccessToken={driveAccessToken}
         onSyncAllToCloud={handleSyncAllToCloud}
@@ -2179,6 +2189,29 @@ export default function App() {
         savedCompaniesCount={savedCompanies.length}
         onConnectGoogle={handleConnectGoogle}
       />
+
+      {/* FLOATING ACTION PILL FOR PENDING USER APPROVALS (For Super Admin psgss91@gmail.com) */}
+      {accessCheck.isAdmin && pendingClientsCount > 0 && !isAdminLogsModalOpen && (
+        <div className="fixed bottom-6 left-6 z-40 animate-bounce no-print">
+          <button
+            type="button"
+            onClick={() => {
+              setAdminModalTab('users');
+              setAdminModalRoleFilter('pending');
+              setIsAdminLogsModalOpen(true);
+            }}
+            className="flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs sm:text-sm rounded-2xl shadow-2xl border-2 border-amber-300 cursor-pointer"
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping" />
+            <Hourglass className="w-4 h-4 text-slate-950" />
+            <span>
+              {language === 'si'
+                ? `🔔 නව පරිශීලක ඉල්ලීම්: ${pendingClientsCount} (අනුමත කරන්න)`
+                : `🔔 Pending Requests: ${pendingClientsCount} (Approve)`}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* TOAST NOTIFICATION */}
       {toastMessage && (

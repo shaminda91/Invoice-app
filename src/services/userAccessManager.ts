@@ -760,6 +760,32 @@ export function createRenewalMailtoLink(profile?: UserAccessProfile | null, user
 }
 
 /**
+ * Generate a web Gmail compose link for renewal request
+ */
+export function createRenewalGmailLink(profile?: UserAccessProfile | null, userEmail?: string): string {
+  const email = profile?.email || userEmail || 'Registered User';
+  const name = profile?.displayName || 'PSN Invoice User';
+  const registered = profile?.firstLoginString || 'Recent';
+  const expired = profile?.expiresAtString || 'Today';
+
+  const subject = `[PSN Invoice] Access Renewal / Update Request - ${email}`;
+  const body =
+    `Hello Administrator (${ADMIN_EMAIL}),\n\n` +
+    `My trial access period for PSN Invoice has expired.\n` +
+    `Please renew or update my access so I can continue generating and exporting invoices.\n\n` +
+    `--- USER DETAILS ---\n` +
+    `Name: ${name}\n` +
+    `Email: ${email}\n` +
+    `Registered Date: ${registered}\n` +
+    `Expired Date: ${expired}\n` +
+    `Allowed Days Given: ${profile?.allowedDays || 7} Days\n\n` +
+    `Thank you,\n` +
+    `${name}`;
+
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+/**
  * Generate a pre-filled mailto link for pending user to request approval from psgss91@gmail.com
  */
 export function createApprovalRequestMailtoLink(profile?: UserAccessProfile | null, userEmail?: string): string {
@@ -782,6 +808,30 @@ export function createApprovalRequestMailtoLink(profile?: UserAccessProfile | nu
     `${name}`;
 
   return `mailto:${ADMIN_EMAIL}?subject=${subject}&body=${encodeURIComponent(body)}`;
+}
+
+/**
+ * Generate a web Gmail compose link for approval request
+ */
+export function createApprovalRequestGmailLink(profile?: UserAccessProfile | null, userEmail?: string): string {
+  const email = profile?.email || userEmail || 'Registered User';
+  const name = profile?.displayName || 'PSN Invoice User';
+  const registered = profile?.firstLoginString || new Date().toLocaleDateString();
+
+  const subject = `[PSN Invoice] Account Approval Request - ${email}`;
+  const body =
+    `Hello Administrator (${ADMIN_EMAIL}),\n\n` +
+    `I have registered on PSN Invoice and would like to request account approval.\n` +
+    `Please approve and activate my account so I can start using the system.\n\n` +
+    `--- USER DETAILS ---\n` +
+    `Name: ${name}\n` +
+    `Email: ${email}\n` +
+    `Registered Date: ${registered}\n` +
+    `Status: Awaiting Admin Approval\n\n` +
+    `Thank you,\n` +
+    `${name}`;
+
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(ADMIN_EMAIL)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 /**

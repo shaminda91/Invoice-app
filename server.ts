@@ -370,6 +370,70 @@ app.post('/api/users/request-approval', (req, res) => {
   });
 });
 
+// 2.2. User clicks Email Admin for approval - records request and logs
+app.post('/api/users/email-admin-request', (req, res) => {
+  const { userId, email, displayName, photoURL, note } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  const cleanEmail = String(email).trim().toLowerCase();
+  const db = loadDatabase();
+  const now = Date.now();
+
+  const existingIndex = db.users.findIndex(
+    (u) => (userId && u.userId === userId) || u.email.toLowerCase() === cleanEmail
+  );
+
+  let profile: ServerDatabase['users'][0];
+
+  if (existingIndex >= 0) {
+    const existing = db.users[existingIndex];
+    profile = {
+      ...existing,
+      userId: userId || existing.userId,
+      email: cleanEmail,
+      displayName: displayName || existing.displayName || cleanEmail.split('@')[0],
+      photoURL: photoURL || existing.photoURL,
+      lastLoginTime: now,
+      lastLoginString: new Date(now).toLocaleString(),
+      unreadBySuperAdmin: true,
+      notes: note || `Email Approval Requested on ${new Date(now).toLocaleString()}`,
+    };
+    db.users[existingIndex] = profile;
+  } else {
+    profile = {
+      userId: userId || `user_${now}_${Math.random().toString(36).substring(2, 8)}`,
+      email: cleanEmail,
+      displayName: displayName || cleanEmail.split('@')[0],
+      photoURL,
+      role: 'client',
+      parentAdminEmail: SUPER_ADMIN_EMAIL,
+      firstLoginTime: now,
+      firstLoginString: new Date(now).toLocaleDateString(),
+      allowedDays: 0,
+      expiresAt: now,
+      expiresAtString: new Date(now).toLocaleDateString(),
+      status: 'pending',
+      lastLoginTime: now,
+      lastLoginString: new Date(now).toLocaleString(),
+      notes: note || `Email Approval Requested on ${new Date(now).toLocaleString()}`,
+      unreadBySuperAdmin: true,
+      permissions: getDefaultPermissions('client'),
+    };
+    db.users.push(profile);
+  }
+
+  saveDatabase(db);
+  console.log(`[EMAIL APPROVAL REQUEST] ${cleanEmail} (${displayName}) sent email request to ${SUPER_ADMIN_EMAIL}`);
+
+  res.json({
+    success: true,
+    message: `Email approval request registered for Super Admin (${SUPER_ADMIN_EMAIL})`,
+    profile,
+  });
+});
+
 // 3. Super Admin changes any user's role
 app.put('/api/users/:userId/role', (req, res) => {
   const { userId } = req.params;

@@ -74,6 +74,7 @@ interface AdminLoginLogsModalProps {
   onRecordsUpdated: (updated: UserLoginRecord[]) => void;
   t: Translations;
   initialTab?: 'users' | 'logs' | 'cloud';
+  initialRoleFilter?: string;
   user?: any;
   driveAccessToken?: string | null;
   onSyncAllToCloud?: () => Promise<CloudSyncSummary | null>;
@@ -93,6 +94,7 @@ export function AdminLoginLogsModal({
   onRecordsUpdated,
   t,
   initialTab = 'users',
+  initialRoleFilter,
   user,
   driveAccessToken,
   onSyncAllToCloud,
@@ -128,7 +130,7 @@ export function AdminLoginLogsModal({
   const [isDriveSyncingUsers, setIsDriveSyncingUsers] = useState(false);
 
   // Role filtering & updating state
-  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [roleFilter, setRoleFilter] = useState<string>(initialRoleFilter || 'all');
   const [isUpdatingRoleId, setIsUpdatingRoleId] = useState<string | null>(null);
 
   const refreshData = () => {
@@ -152,6 +154,12 @@ export function AdminLoginLogsModal({
       if (initialTab) {
         setActiveTab(initialTab);
       }
+      if (initialRoleFilter) {
+        setRoleFilter(initialRoleFilter);
+      }
+      // Auto-refresh data every 3 seconds while modal is open so approval requests appear live
+      const liveInterval = setInterval(refreshData, 3000);
+
       // Auto-fetch from Drive if token is available
       if (driveAccessToken) {
         fetchProfilesFromDrive(driveAccessToken).then((profiles) => {
@@ -165,8 +173,10 @@ export function AdminLoginLogsModal({
           }
         }).catch(() => {});
       }
+
+      return () => clearInterval(liveInterval);
     }
-  }, [isOpen, initialTab, driveAccessToken]);
+  }, [isOpen, initialTab, initialRoleFilter, driveAccessToken]);
 
   const handleRegisterClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
