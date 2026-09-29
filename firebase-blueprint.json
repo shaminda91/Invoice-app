@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role, subscription status, and permissions",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "manager", "client"] },
+        "status": { "type": "string", "enum": ["pending", "active", "unlimited", "expired", "blocked"] },
+        "allowedDays": { "type": "number" },
+        "expiresAt": { "type": "number" },
+        "ownerEmail": { "type": "string" },
+        "lastLoginAt": { "type": "object" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["uid", "email"]
+    },
+    "ApprovalRequest": {
+      "title": "ApprovalRequest",
+      "description": "User request for system access submitted to Super Admin",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "requestedAt": { "type": "object" },
+        "allowedDays": { "type": "number" },
+        "notes": { "type": "string" },
+        "targetAdminEmail": { "type": "string" }
+      },
+      "required": ["userId", "email"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account documents keyed by Firebase Auth UID"
+    },
+    "/approval_requests/{requestId}": {
+      "schema": "ApprovalRequest",
+      "description": "Pending approval requests sent to Super Admin"
+    }
+  }
+}

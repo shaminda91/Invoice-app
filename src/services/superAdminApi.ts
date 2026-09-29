@@ -279,6 +279,64 @@ export async function getServerSystemStatus(): Promise<SystemStatusResponse | nu
   }
 }
 
+/**
+ * Submit an in-app approval request from user to Super Admin psgss91@gmail.com
+ */
+export async function submitApprovalRequest(
+  user: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL?: string | null;
+  },
+  note?: string
+): Promise<{ success: boolean; message: string; profile?: UserAccessProfile }> {
+  try {
+    const res = await fetch('/api/users/request-approval', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        note,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Server returned ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.profile) {
+      const cached = getCachedProfiles();
+      const idx = cached.findIndex((p) => p.userId === data.profile.userId);
+      if (idx >= 0) {
+        cached[idx] = data.profile;
+      } else {
+        cached.unshift(data.profile);
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(cached));
+      } catch {}
+    }
+
+    return {
+      success: true,
+      message: data.message || 'Approval request submitted successfully',
+      profile: data.profile,
+    };
+  } catch (err: any) {
+    console.warn('Could not submit approval request to server:', err);
+    return {
+      success: false,
+      message: err?.message || 'Network error submitting request',
+    };
+  }
+}
+
+
 function getCachedProfiles(): UserAccessProfile[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_PROFILES);

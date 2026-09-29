@@ -193,3 +193,47 @@ export const logOutGoogle = async (): Promise<void> => {
   cachedAccessToken = null;
   tokenExpiryTime = 0;
 };
+
+/**
+ * Submit approval request to Firestore so Super Admin psgss91@gmail.com sees it across all devices
+ */
+export const submitApprovalRequestToFirestore = async (user: {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL?: string | null;
+}): Promise<boolean> => {
+  if (!user.uid || !user.email) return false;
+
+  try {
+    const isRootAdmin = user.email.trim().toLowerCase() === 'psgss91@gmail.com';
+
+    await setDoc(doc(db, 'approval_requests', user.uid), {
+      userId: user.uid,
+      email: user.email,
+      displayName: user.displayName || 'Google User',
+      photoURL: user.photoURL || null,
+      status: isRootAdmin ? 'approved' : 'pending',
+      targetAdminEmail: 'psgss91@gmail.com',
+      requestedAt: serverTimestamp(),
+    }, { merge: true });
+
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || 'Google User',
+      photoURL: user.photoURL || null,
+      role: isRootAdmin ? 'super_admin' : 'client',
+      status: isRootAdmin ? 'unlimited' : 'pending',
+      ownerEmail: 'psgss91@gmail.com',
+      lastLoginAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    return true;
+  } catch (err) {
+    console.warn('Could not submit request to Firestore:', err);
+    return false;
+  }
+};
+

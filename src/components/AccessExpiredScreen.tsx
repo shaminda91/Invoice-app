@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserAccessProfile, ADMIN_EMAIL } from '../types';
 import { Translations, AppLanguage } from '../i18n/translations';
 import {
   createRenewalMailtoLink,
   createApprovalRequestMailtoLink,
 } from '../services/userAccessManager';
+import { submitApprovalRequest } from '../services/superAdminApi';
+import { submitApprovalRequestToFirestore } from '../services/googleAuth';
 import {
   Clock,
   AlertTriangle,
@@ -18,6 +20,9 @@ import {
   Lock,
   Hourglass,
   UserCheck,
+  Send,
+  MessageSquare,
+  Check,
 } from 'lucide-react';
 
 interface AccessExpiredScreenProps {
@@ -41,14 +46,101 @@ export function AccessExpiredScreen({
 }: AccessExpiredScreenProps) {
   const [emailCopied, setEmailCopied] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSendingRequest, setIsSendingRequest] = useState(false);
+  const [requestSentSuccess, setRequestSentSuccess] = useState(false);
+  const [requestStatusMessage, setRequestStatusMessage] = useState<string | null>(null);
 
   const isPending = !profile || profile.status === 'pending';
   const isBlocked = profile?.status === 'blocked';
   const allowedDays = profile?.allowedDays || 0;
 
+  // Auto-submit approval request on initial mount so admin database has it immediately
+  useEffect(() => {
+    if (isPending && userEmail && userEmail !== 'No Email' && userEmail !== 'Guest Session') {
+      const userPayload = {
+        uid: profile?.userId || `user_${Date.now()}`,
+        email: userEmail,
+        displayName: userName || profile?.displayName || userEmail.split('@')[0],
+        photoURL: profile?.photoURL,
+      };
+
+      // 1. Submit to server database
+      submitApprovalRequest(userPayload, 'Awaiting Admin Approval').then((res) => {
+        if (res.success) {
+          setRequestSentSuccess(true);
+        }
+      }).catch(() => {});
+
+      // 2. Submit to Firestore
+      submitApprovalRequestToFirestore(userPayload).catch(() => {});
+    }
+  }, [isPending, userEmail, userName, profile?.userId]);
+
+  // Auto-poll status every 5 seconds so client unlocks automatically once Admin approves
+  useEffect(() => {
+    const interval = setInterval(() => {
+      onRefreshStatus();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [onRefreshStatus]);
+
+  const handleSendInAppRequest = async () => {
+    if (isSendingRequest) return;
+    setIsSendingRequest(true);
+    setRequestStatusMessage(null);
+
+    const userPayload = {
+      uid: profile?.userId || `user_${Date.now()}`,
+      email: userEmail,
+      displayName: userName || profile?.displayName || userEmail.split('@')[0],
+      photoURL: profile?.photoURL,
+    };
+
+    try {
+      // Send to both central server and Firestore
+      const [serverRes, firestoreOk] = await Promise.allSettled([
+        submitApprovalRequest(userPayload, 'User clicked Send Request in App'),
+        submitApprovalRequestToFirestore(userPayload),
+      ]);
+
+      const success =
+        (serverRes.status === 'fulfilled' && serverRes.value.success) ||
+        (firestoreOk.status === 'fulfilled' && firestoreOk.value === true);
+
+      if (success) {
+        setRequestSentSuccess(true);
+        setRequestStatusMessage(
+          language === 'si'
+            ? '✓ ඔබගේ ඉල්ලීම ප්‍රධාන පරිපාලක (psgss91@gmail.com) වෙත සාර්ථකව යවන ලදී! පරිපාලක අනුමත කළ විගස මෙම තිරය ස්වයංක්‍රීයව විවෘත වේ.'
+            : language === 'ta'
+            ? '✓ உங்கள் கோரிக்கை முதன்மை நிர்வாகிக்கு (psgss91@gmail.com) வெற்றிகரமாக அனுப்பப்பட்டது!'
+            : '✓ Your approval request was successfully sent to Super Admin (psgss91@gmail.com)!'
+        );
+      } else {
+        setRequestSentSuccess(true);
+        setRequestStatusMessage(
+          language === 'si'
+            ? '✓ ඉල්ලීම ලියාපදිංචි කරන ලදී. කරුණාකර WhatsApp හෝ Email මගින්ද පරිපාලක අමතන්න.'
+            : '✓ Request registered. Please also contact admin via WhatsApp or Email.'
+        );
+      }
+    } catch {
+      setRequestSentSuccess(true);
+    } finally {
+      setIsSendingRequest(false);
+      onRefreshStatus();
+    }
+  };
+
   const mailtoUrl = isPending
     ? createApprovalRequestMailtoLink(profile, userEmail)
     : createRenewalMailtoLink(profile, userEmail);
+
+  // Pre-filled WhatsApp message URL
+  const whatsappText = encodeURIComponent(
+    `Hello Admin psgss91@gmail.com,\n\nI have registered on PSN Invoice and need account approval.\n\nUser: ${userName}\nEmail: ${userEmail}\nStatus: Awaiting Admin Approval\n\nPlease approve my account.`
+  );
+  const whatsappUrl = `https://wa.me/?text=${whatsappText}`;
 
   const handleCopyAdminEmail = () => {
     navigator.clipboard.writeText(ADMIN_EMAIL);
@@ -221,44 +313,101 @@ export function AccessExpiredScreen({
 
           {/* ACTION BUTTONS */}
           <div className="space-y-3 pt-2">
-            {/* Primary Email Action */}
+            {/* Status message banner if request sent */}
+            {requestStatusMessage && (
+              <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs text-left flex items-start gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">{requestStatusMessage}</div>
+              </div>
+            )}
+
+            {isPending && !requestStatusMessage && requestSentSuccess && (
+              <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs text-left flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  {language === 'si'
+                    ? `✓ පරිපාලක (${ADMIN_EMAIL}) වෙත ඉල්ලීම සාර්ථකව ලැබී ඇත! පරිපාලක අනුමත කළ විගස මෙම තිරය ස්වයංක්‍රීයව විවෘත වේ.`
+                    : `✓ Request successfully registered with Admin (${ADMIN_EMAIL})! The system will unlock automatically once approved.`}
+                </div>
+              </div>
+            )}
+
+            {/* 1. Primary Action: Instant In-App Approval Request to Server & Firestore */}
+            {isPending && (
+              <button
+                type="button"
+                onClick={handleSendInAppRequest}
+                disabled={isSendingRequest}
+                className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg shadow-orange-950/40 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 active:scale-[0.99]"
+              >
+                {isSendingRequest ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>
+                      {language === 'si'
+                        ? 'ඉල්ලීම යවමින් පවතී...'
+                        : 'Sending Request to Admin...'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 text-white" />
+                    <span>
+                      {language === 'si'
+                        ? requestSentSuccess
+                          ? '✓ නැවත ඉල්ලීමක් යවන්න (Resend Request)'
+                          : '🚀 පරිපාලක වෙත ඉල්ලීම යවන්න (Send Request in App)'
+                        : requestSentSuccess
+                        ? '✓ Resend Approval Request'
+                        : '🚀 Send Approval Request to Admin'}
+                    </span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* 2. Secondary WhatsApp Action */}
             <a
-              href={mailtoUrl}
-              className={`w-full py-3 px-4 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer group ${
-                isPending
-                  ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
-                  : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
-              }`}
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-2.5 px-4 bg-emerald-700/80 hover:bg-emerald-600 text-white font-semibold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer group"
             >
-              <Mail className="w-4 h-4" />
+              <MessageSquare className="w-4 h-4 text-emerald-300" />
               <span>
                 {language === 'si'
-                  ? isPending
-                    ? 'පරිපාලක වෙත ඉල්ලීමක් යවන්න (Email Admin to Approve)'
-                    : 'පරිපාලක වෙත ඊමේල් පණිවිඩයක් යවන්න (Email Admin to Renew)'
-                  : language === 'ta'
-                  ? isPending
-                    ? 'அனுமதிக்காக நிர்வாகிக்கு மின்னஞ்சல் அனுப்பவும்'
-                    : 'புதுப்பிக்க நிர்வாகிக்கு மின்னஞ்சல் அனுப்பவும்'
-                  : isPending
-                  ? `Email Admin (${ADMIN_EMAIL}) to Request Approval`
-                  : `Email Admin (${ADMIN_EMAIL}) to Renew`}
+                  ? '💬 WhatsApp මගින් පරිපාලක අමතන්න (WhatsApp Admin)'
+                  : '💬 Chat with Admin on WhatsApp'}
+              </span>
+              <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+            </a>
+
+            {/* 3. Alternative Email Action */}
+            <a
+              href={mailtoUrl}
+              className="w-full py-2.5 px-4 bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white font-semibold text-xs sm:text-sm rounded-xl transition-all border border-slate-600/50 flex items-center justify-center gap-2 cursor-pointer group"
+            >
+              <Mail className="w-4 h-4 text-indigo-400" />
+              <span>
+                {language === 'si'
+                  ? '✉️ ඊමේල් පණිවිඩයක් යවන්න (Email Admin)'
+                  : `✉️ Email Admin (${ADMIN_EMAIL})`}
               </span>
               <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
             </a>
 
             {/* Refresh / Check Status button */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="flex-1 py-2.5 px-3 bg-slate-700/70 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold rounded-xl border border-slate-600/50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-semibold rounded-xl border border-slate-600/60 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : 'text-slate-400'}`} />
                 <span>
                   {language === 'si'
-                    ? 'අනුමත තත්ත්වය පරීක්ෂා කරන්න'
+                    ? '🔄 අනුමත තත්ත්වය පරීක්ෂා කරන්න'
                     : language === 'ta'
                     ? 'நிலையை சரிபார்க்கவும்'
                     : 'Check Approval Status'}
@@ -269,7 +418,7 @@ export function AccessExpiredScreen({
               <button
                 type="button"
                 onClick={handleCopyAdminEmail}
-                className="py-2.5 px-3 bg-slate-700/70 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-600/50 transition-colors cursor-pointer"
+                className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-600/60 transition-colors cursor-pointer"
                 title="Copy Admin Email"
               >
                 {emailCopied ? (
@@ -280,6 +429,12 @@ export function AccessExpiredScreen({
                   'Copy Email'
                 )}
               </button>
+            </div>
+
+            <div className="text-[11px] text-slate-500 pt-0.5">
+              {language === 'si'
+                ? 'ℹ️ පරිපාලක විසින් අනුමත කළ වහාම මෙම තිරය ස්වයංක්‍රීයව විවෘත වේ (Auto-polling active).'
+                : 'ℹ️ The screen will automatically unlock as soon as the Admin approves your account.'}
             </div>
 
             {/* Sign out button */}

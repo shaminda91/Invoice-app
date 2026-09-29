@@ -1109,6 +1109,17 @@ export function AdminLoginLogsModal({
                                 <span className="text-[11px] text-slate-400 italic">Permanent Admin</span>
                               ) : user.status === 'pending' ? (
                                 <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {/* QUICK APPROVE 7 DAYS */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveUser(user.userId, 7)}
+                                    className="px-2 py-1 text-[11px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-md transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                    title="Approve user with 7 days trial"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Approve (7d)</span>
+                                  </button>
+
                                   {/* QUICK APPROVE 30 DAYS */}
                                   <button
                                     type="button"

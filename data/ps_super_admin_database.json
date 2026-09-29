@@ -14,8 +14,8 @@
       "expiresAt": 4944274991739,
       "expiresAtString": "Permanent / Unlimited",
       "status": "unlimited",
-      "lastLoginTime": 1790675542471,
-      "lastLoginString": "9/29/2026, 9:52:22 AM",
+      "lastLoginTime": 1790676724481,
+      "lastLoginString": "9/29/2026, 10:12:04 AM",
       "notes": "Root Super Administrator & System Owner",
       "unreadBySuperAdmin": false,
       "permissions": {
@@ -28,6 +28,32 @@
         "canManageUsers": true
       },
       "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocKdiigjdzBOHLuccLiD3I_WprJJORgbvbGS35mPlBf-2WmsFEkJ=s96-c"
+    },
+    {
+      "userId": "test_psdata91",
+      "email": "psdata91@gmail.com",
+      "displayName": "pramesh shaminda",
+      "role": "client",
+      "parentAdminEmail": "psgss91@gmail.com",
+      "firstLoginTime": 1790679280332,
+      "firstLoginString": "9/29/2026",
+      "allowedDays": 0,
+      "expiresAt": 1790679280332,
+      "expiresAtString": "9/29/2026",
+      "status": "pending",
+      "lastLoginTime": 1790679501989,
+      "lastLoginString": "9/29/2026, 10:58:21 AM",
+      "notes": "Direct user approval request",
+      "unreadBySuperAdmin": true,
+      "permissions": {
+        "canCreateInvoice": true,
+        "canEditInvoice": true,
+        "canDeleteInvoice": false,
+        "canExportPDF": true,
+        "canManageClients": false,
+        "canViewReports": false,
+        "canManageUsers": false
+      }
     }
   ]
 }

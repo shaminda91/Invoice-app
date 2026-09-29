@@ -296,6 +296,21 @@ export default function App() {
     };
   }, []);
 
+  // Periodically poll server database for pending registrations if logged in as Super Admin
+  useEffect(() => {
+    if (!googleUser || googleUser.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+      return;
+    }
+
+    const pollInterval = setInterval(() => {
+      fetchServerUsers().then(() => {
+        setAccessRefreshCounter((c) => c + 1);
+      }).catch(() => {});
+    }, 8000);
+
+    return () => clearInterval(pollInterval);
+  }, [googleUser]);
+
   // Persist Drive auto-save preference
   const handleToggleAutoSave = (enabled: boolean) => {
     setIsDriveAutoSaveEnabled(enabled);

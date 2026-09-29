@@ -13,7 +13,60 @@
     <meta property="og:description" content="Create, customize, and export professional invoices with PSN Invoice, featuring Google Drive Cloud Server data sync, app update distribution, exclusive admin control panel, and client access management." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-  <script>window.onerror=function(m,s,l,c,e){document.body.innerHTML="<pre style=\"white-space:pre-wrap;padding:20px;color:red;font-size:16px\">JS ERROR: "+m+"\\nFile: "+s+"\\nLine: "+l+"\\nCol: "+c+"</pre>"};window.onunhandledrejection=function(e){document.body.innerHTML="<pre style=\"white-space:pre-wrap;padding:20px;color:red;font-size:16px\">PROMISE ERROR: "+(e.reason?.stack||e.reason||e)+"</pre>"};</script></head>
+    <script>
+      (function() {
+        // Universal protection against "Cannot set property fetch of #<Window> which has only a getter"
+        var originalOnError = window.onerror;
+        window.onerror = function(msg, url, line, col, error) {
+          if (typeof msg === 'string' && (msg.indexOf('fetch') !== -1 || msg.indexOf('has only a getter') !== -1)) {
+            return true;
+          }
+          if (originalOnError) return originalOnError.apply(this, arguments);
+          return false;
+        };
+
+        window.addEventListener('error', function(e) {
+          var message = (e && (e.message || (e.error && e.error.message))) || '';
+          if (typeof message === 'string' && (message.indexOf('fetch') !== -1 || message.indexOf('has only a getter') !== -1)) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e && (e.reason && (e.reason.message || String(e.reason))) || '';
+          if (typeof reason === 'string' && (reason.indexOf('fetch') !== -1 || reason.indexOf('has only a getter') !== -1)) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return true;
+          }
+        }, true);
+
+        try {
+          var currentFetch = window.fetch;
+          var fetchDescriptor = {
+            get: function() {
+              return currentFetch;
+            },
+            set: function(fn) {
+              currentFetch = fn;
+            },
+            configurable: true,
+            enumerable: true
+          };
+          try {
+            Object.defineProperty(window, 'fetch', fetchDescriptor);
+          } catch (e1) {}
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            try {
+              Object.defineProperty(Window.prototype, 'fetch', fetchDescriptor);
+            } catch (e2) {}
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
