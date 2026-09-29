@@ -80,6 +80,7 @@ import {
   Columns,
   Crown,
   Bell,
+  Hourglass,
 } from 'lucide-react';
 import { MobileActionDrawer } from './components/MobileActionDrawer';
 
@@ -267,11 +268,13 @@ export default function App() {
           console.error('Failed to record user login:', e);
         }
 
-        // If super admin logs in, auto-fetch registered client profiles from server and Google Drive
+        // Fetch latest registered profiles from server so user status updates immediately
+        fetchServerUsers().then(() => {
+          setAccessRefreshCounter((c) => c + 1);
+        }).catch(() => {});
+
+        // If super admin logs in, also auto-fetch from Google Drive
         if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
-          fetchServerUsers().then(() => {
-            setAccessRefreshCounter((c) => c + 1);
-          }).catch(() => {});
           if (token) {
             fetchProfilesFromDrive(token).then(() => {
               setAccessRefreshCounter((c) => c + 1);
@@ -343,6 +346,14 @@ export default function App() {
         // ignore
       }
 
+      // Record login details & register user access
+      try {
+        registerOrUpdateUserAccess(user, accessToken);
+        setAccessRefreshCounter((c) => c + 1);
+      } catch (accErr) {
+        console.warn('Could not register user access:', accErr);
+      }
+
       // Record login details for psgss91@gmail.com
       try {
         await recordUserLogin(user, accessToken);
@@ -350,6 +361,12 @@ export default function App() {
       } catch (logErr) {
         console.warn('Could not record login:', logErr);
       }
+
+      // Fetch latest registered profiles from server
+      try {
+        await fetchServerUsers();
+        setAccessRefreshCounter((c) => c + 1);
+      } catch {}
 
       showToast(`${user.displayName || user.email} - ${t.toastDriveSaved}`);
 
@@ -404,10 +421,15 @@ export default function App() {
         console.warn('Could not record login:', logErr);
       }
 
-      // If Super Admin logs in, auto-fetch from server & Google Drive
+      // Fetch latest registered profiles from server so user status is up to date
+      try {
+        await fetchServerUsers();
+        setAccessRefreshCounter((c) => c + 1);
+      } catch {}
+
+      // If Super Admin logs in, auto-fetch from Google Drive
       if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
         try {
-          await fetchServerUsers();
           if (accessToken) {
             await fetchProfilesFromDrive(accessToken);
             const driveLogs = await fetchLoginRecordsFromDrive(accessToken);
@@ -958,6 +980,10 @@ export default function App() {
     return getAllUserProfiles().filter((p) => p.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase());
   }, [accessRefreshCounter, googleUser]);
 
+  const pendingClientsCount = React.useMemo(() => {
+    return registeredClients.filter((p) => p.status === 'pending').length;
+  }, [registeredClients]);
+
   const activeClientsCount = React.useMemo(() => {
     return registeredClients.filter((p) => p.status === 'active' || p.status === 'unlimited').length;
   }, [registeredClients]);
@@ -1006,12 +1032,21 @@ export default function App() {
           }
           showToast(t.logout);
         }}
-        onRefreshStatus={() => {
+        onRefreshStatus={async () => {
+          try {
+            await fetchServerUsers();
+          } catch {}
           setAccessRefreshCounter((c) => c + 1);
           if (googleUser) {
             const recheck = checkUserAccessStatus(googleUser);
             if (recheck.isAllowed) {
-              showToast(t.userDaysUpdatedSuccess);
+              showToast(language === 'si' ? 'ගිණුම අනුමත කර ඇත! සාදරයෙන් පිළිගනිමු.' : 'Account approved! Welcome.');
+            } else if (recheck.isPendingApproval) {
+              showToast(
+                language === 'si'
+                  ? 'තවමත් පරිපාලකගේ අනුමැතිය බලාපොරොත්තුවෙන් පවතී (psgss91@gmail.com).'
+                  : 'Still awaiting admin approval (psgss91@gmail.com).'
+              );
             } else {
               showToast('Still expired. Please contact admin (psgss91@gmail.com).');
             }
@@ -1160,32 +1195,34 @@ export default function App() {
               </span>
             </button>
 
-            {/* CLOUD SERVER & APP UPDATE CENTER (DESKTOP) */}
-            <button
-              type="button"
-              id="btn-cloud-server-header"
-              onClick={() => {
-                setAdminModalTab('cloud');
-                setIsAdminLogsModalOpen(true);
-              }}
-              className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-2xs ${
-                driveAccessToken
-                  ? 'bg-indigo-50/90 text-indigo-950 hover:bg-indigo-100 border-indigo-200'
-                  : 'bg-slate-50 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70 border-slate-200'
-              }`}
-              title="Master Cloud Server & App Updates (psgss91@gmail.com)"
-            >
-              <div className="relative flex items-center">
-                <Cloud className="w-3.5 h-3.5 text-indigo-600" />
-                {driveAccessToken && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full ring-1 ring-white animate-pulse" />
-                )}
-              </div>
-              <span>Cloud Server</span>
-              <span className="text-[10px] font-mono bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded-md font-bold border border-indigo-200">
-                psgss91
-              </span>
-            </button>
+            {/* CLOUD SERVER & APP UPDATE CENTER (DESKTOP - EXCLUSIVELY FOR SUPER ADMIN psgss91@gmail.com) */}
+            {accessCheck.isAdmin && (
+              <button
+                type="button"
+                id="btn-cloud-server-header"
+                onClick={() => {
+                  setAdminModalTab('cloud');
+                  setIsAdminLogsModalOpen(true);
+                }}
+                className={`hidden lg:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-2xs ${
+                  driveAccessToken
+                    ? 'bg-indigo-50/90 text-indigo-950 hover:bg-indigo-100 border-indigo-200'
+                    : 'bg-slate-50 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/70 border-slate-200'
+                }`}
+                title="Master Cloud Server & App Updates (psgss91@gmail.com)"
+              >
+                <div className="relative flex items-center">
+                  <Cloud className="w-3.5 h-3.5 text-indigo-600" />
+                  {driveAccessToken && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full ring-1 ring-white animate-pulse" />
+                  )}
+                </div>
+                <span>Cloud Server</span>
+                <span className="text-[10px] font-mono bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded-md font-bold border border-indigo-200">
+                  psgss91
+                </span>
+              </button>
+            )}
 
             {/* SAVED COMPANIES BUTTON (DESKTOP) */}
             <button
@@ -1429,13 +1466,30 @@ export default function App() {
               </span>
               <span className="font-semibold text-slate-100 text-[11px] sm:text-xs">
                 {language === 'si'
-                  ? `සේවාලාභී ලියාපදිංචි පණිවිඩය (Client Register Status): ලියාපදිංචි සේවාලාභීන් ${registeredClients.length} ක් ඇත (සක්‍රීය: ${activeClientsCount}, අවසන් වූ: ${expiredClientsCount}). නව පරිශීලකයින්ට දින ${defaultAccessDays} ක අත්හදා බැලීමක් ලැබේ.`
+                  ? `සේවාලාභී තත්ත්වය: ලියාපදිංචි සේවාලාභීන් ${registeredClients.length} (අනුමැතිය අවශ්‍යයි: ${pendingClientsCount}, සක්‍රීය: ${activeClientsCount}, අවසන් වූ: ${expiredClientsCount}).`
                   : language === 'ta'
-                  ? `வாடிக்கையாளர் பதிவு நிலை: ${registeredClients.length} வாடிக்கையாளர்கள் பதிவு செய்துள்ளனர் (${activeClientsCount} செயலில், ${expiredClientsCount} காலாவதியானது). புதிய பயனர்களுக்கு ${defaultAccessDays} நாட்கள் சோதனை வழங்கப்படும்.`
-                  : `Client Registration Status: ${registeredClients.length} Registered Clients (${activeClientsCount} Active, ${expiredClientsCount} Expired). New users receive ${defaultAccessDays} days trial.`}
+                  ? `வாடிக்கையாளர் நிலை: மொத்தம் ${registeredClients.length} (ஒப்புதல் தேவை: ${pendingClientsCount}, செயலில்: ${activeClientsCount}, காலாவதியானது: ${expiredClientsCount}).`
+                  : `Client Status: ${registeredClients.length} Registered (Pending Approval: ${pendingClientsCount}, Active: ${activeClientsCount}, Expired: ${expiredClientsCount}).`}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {pendingClientsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdminModalTab('users');
+                    setIsAdminLogsModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg font-black text-[11px] transition-colors cursor-pointer shadow-xs animate-bounce"
+                >
+                  <Hourglass className="w-3.5 h-3.5" />
+                  <span>
+                    {language === 'si'
+                      ? `අනුමත කරන්න (${pendingClientsCount})`
+                      : `Approve (${pendingClientsCount})`}
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
                 id="btn-admin-manage-clients-banner"
@@ -1448,7 +1502,7 @@ export default function App() {
                 <Users className="w-3.5 h-3.5" />
                 <span>
                   {language === 'si'
-                    ? 'සේවාලාභී ලියාපදිංචි තොරතුරු / කළමනාකරණය'
+                    ? 'සේවාලාභී ලියාපදිංචි කළමනාකරණය'
                     : language === 'ta'
                     ? 'பதிவுசெய்த வாடிக்கையாளர்கள்'
                     : 'Manage Registered Clients'}
@@ -1459,24 +1513,26 @@ export default function App() {
         </div>
       )}
 
-      {/* 1.2 CLIENT TRIAL ACTIVE REGISTRATION BANNER (For non-admin logged-in clients) */}
+      {/* 1.2 CLIENT APPROVED ACTIVE REGISTRATION BANNER (For non-admin logged-in clients) */}
       {googleUser && !accessCheck.isAdmin && (
         <div className="no-print bg-emerald-500/10 border-b border-emerald-500/20 px-3 sm:px-6 py-2 text-xs text-emerald-950">
           <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-bold bg-emerald-200 text-emerald-950 px-2 py-0.5 rounded text-[10px] uppercase">
-                {language === 'si' ? 'ලියාපදිංචි සේවාලාභී ගිණුම' : language === 'ta' ? 'பதிவுசெய்த கணக்கு' : 'Registered Client'}
+                {language === 'si' ? 'අනුමත සේවාලාභී ගිණුම' : language === 'ta' ? 'அங்கீகரிக்கப்பட்ட கணக்கு' : 'Approved Client'}
               </span>
               <span className="font-medium text-[11px] sm:text-xs">
                 {language === 'si'
-                  ? `ඔබගේ දින ${accessCheck.profile?.allowedDays || 7} ක නොමිලේ අත්හදා බැලීමේ කාලය සක්‍රියයි (අවසන් වන දිනය: ${accessCheck.profile?.expiresAtString || 'දින කිහිපයකින්'}).`
+                  ? `ප්‍රධාන පරිපාලක (${ADMIN_EMAIL}) විසින් ඔබගේ ගිණුම අනුමත කර ඇත. (අවසන් වන දිනය: ${accessCheck.profile?.status === 'unlimited' ? 'අසීමිත (Unlimited)' : accessCheck.profile?.expiresAtString || 'දින කිහිපයකින්'}).`
                   : language === 'ta'
-                  ? `உங்கள் ${accessCheck.profile?.allowedDays || 7} நாட்கள் இலவச சோதனைக் காலம் செயலில் உள்ளது (காலாவதி: ${accessCheck.profile?.expiresAtString || ''}).`
-                  : `Your ${accessCheck.profile?.allowedDays || 7}-day trial access is active (Expires: ${accessCheck.profile?.expiresAtString || ''}).`}
+                  ? `நிர்வாகி (${ADMIN_EMAIL}) உங்கள் கணக்கை அங்கீகரித்துள்ளார் (காலாவதி: ${accessCheck.profile?.status === 'unlimited' ? 'வரம்பற்றது' : accessCheck.profile?.expiresAtString || ''}).`
+                  : `Your account is approved by Admin (${ADMIN_EMAIL}) (Expires: ${accessCheck.profile?.status === 'unlimited' ? 'Unlimited' : accessCheck.profile?.expiresAtString || ''}).`}
               </span>
             </div>
             <div className="text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
-              {accessCheck.daysRemaining} {language === 'si' ? 'දින ඉතිරියි' : language === 'ta' ? 'நாட்கள் மீதம்' : 'days left'}
+              {accessCheck.profile?.status === 'unlimited'
+                ? '∞ Unlimited'
+                : `${accessCheck.daysRemaining} ${language === 'si' ? 'දින ඉතිරියි' : language === 'ta' ? 'நாட்கள் மீதம்' : 'days left'}`}
             </div>
           </div>
         </div>
@@ -1998,8 +2054,10 @@ export default function App() {
         isDriveSyncing={isDriveSyncing}
         onOpenDriveModal={() => setIsDriveModalOpen(true)}
         onOpenCloudServer={() => {
-          setAdminModalTab('cloud');
-          setIsAdminLogsModalOpen(true);
+          if (accessCheck.isAdmin) {
+            setAdminModalTab('cloud');
+            setIsAdminLogsModalOpen(true);
+          }
         }}
         onSaveDraft={handleSaveInvoice}
         onExportPDF={handleExportPDF}
@@ -2020,8 +2078,10 @@ export default function App() {
         onOpenCompaniesModal={() => setIsCompanyModalOpen(true)}
         onOpenClientsModal={() => setIsClientModalOpen(true)}
         onOpenAdminPanel={() => {
-          setAdminModalTab('users');
-          setIsAdminLogsModalOpen(true);
+          if (accessCheck.isAdmin) {
+            setAdminModalTab('users');
+            setIsAdminLogsModalOpen(true);
+          }
         }}
         savedInvoicesCount={savedInvoices.length}
         savedCompaniesCount={savedCompanies.length}

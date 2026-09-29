@@ -246,27 +246,26 @@ export function LoginPage({
             )}
           </button>
 
-          {/* DIVIDER */}
-          <div className="relative my-5">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-700" />
-            </div>
-            <div className="relative flex justify-center text-[11px] uppercase">
-              <span className="bg-slate-800 px-3 text-slate-400">
-                {language === 'si' ? 'හෝ' : language === 'ta' ? 'அல்லது' : 'or'}
+          {/* ADMIN APPROVAL NOTICE (NO FREE UNAPPROVED USE) */}
+          <div className="mt-4 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center text-xs space-y-1">
+            <div className="font-bold text-amber-300 flex items-center justify-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              <span>
+                {language === 'si'
+                  ? 'පරිපාලකගේ අවසරය අනිවාර්යයි'
+                  : language === 'ta'
+                  ? 'நிர்வாகியின் அனுமதி கட்டாயமானது'
+                  : 'Admin Approval Strictly Required'}
               </span>
             </div>
+            <p className="text-[11px] text-slate-300 leading-snug">
+              {language === 'si'
+                ? `නොමිලේ භාවිත කළ නොහැක. Gmail මගින් පිවිසි පසු ප්‍රධාන පරිපාලක (${ADMIN_EMAIL}) විසින් අනුමත කළ යුතුය.`
+                : language === 'ta'
+                ? `இலவசமாகப் பயன்படுத்த முடியாது. Gmail மூலம் உள்நுழைந்த பிறகு (${ADMIN_EMAIL}) அனுமதி தேவை.`
+                : `Free access is not permitted. Once signed in with Google, your account must be approved by ${ADMIN_EMAIL}.`}
+            </p>
           </div>
-
-          {/* GUEST ACCESS BUTTON */}
-          <button
-            type="button"
-            id="btn-login-guest"
-            onClick={onContinueGuest}
-            className="w-full py-2.5 px-4 bg-slate-700/60 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-600/50 transition-colors cursor-pointer text-center"
-          >
-            {t.continueAsGuest}
-          </button>
 
           {/* ADMIN MONITORING & TRIAL BADGE */}
           <div className="mt-6 pt-4 border-t border-slate-700/60 space-y-2 text-[11px] text-slate-400">
@@ -275,27 +274,27 @@ export function LoginPage({
               <p className="leading-snug">
                 {language === 'si' ? (
                   <>
-                    පරිපාලක ගිණුම:{' '}
-                    <span className="text-indigo-300 font-mono font-semibold">
+                    ප්‍රධාන පරිපාලක ගිණුම:{' '}
+                    <span className="text-amber-300 font-mono font-semibold">
                       {ADMIN_EMAIL}
                     </span>
-                    . සියලුම පිවිසුම් තොරතුරු පරිපාලක වෙත වාර්තා වේ.
+                    . ලියාපදිංචි වන සියලුම ගිණුම් පරිපාලකගේ සෘජු පාලනය යටතේ පවතී.
                   </>
                 ) : language === 'ta' ? (
                   <>
                     நிர்வாகி கணக்கு:{' '}
-                    <span className="text-indigo-300 font-mono font-semibold">
+                    <span className="text-amber-300 font-mono font-semibold">
                       {ADMIN_EMAIL}
                     </span>
-                    . அனைத்து உள்நுழைவுகளும் நிர்வாகியிடம் பதிவு செய்யப்படுகின்றன.
+                    . அனைத்து கணக்குகளும் நிர்வாகியின் நேரடி கட்டுப்பாட்டில் இருக்கும்.
                   </>
                 ) : (
                   <>
                     System Admin:{' '}
-                    <span className="text-indigo-300 font-mono font-semibold">
+                    <span className="text-amber-300 font-mono font-semibold">
                       {ADMIN_EMAIL}
                     </span>
-                    . User sessions are securely logged.
+                    . All registered accounts are directly managed by Admin.
                   </>
                 )}
               </p>
@@ -309,12 +308,12 @@ export function LoginPage({
                   ? 'புதிய பயனர் அணுகல்:'
                   : 'New user access:'}
               </span>
-              <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                {language === 'si'
-                  ? 'දින 7 ක අත්හදා බැලීමක්'
+              <span className="font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 flex items-center gap-1">
+                ⏳ {language === 'si'
+                  ? 'පරිපාලක අනුමැතිය අවශ්‍යයි'
                   : language === 'ta'
-                  ? '7 நாட்கள் இலவச சோதனை'
-                  : '7 Days Trial Access'}
+                  ? 'நிர்வாகியின் அனுமதி தேவை'
+                  : 'Admin Approval Required'}
               </span>
             </div>
           </div>

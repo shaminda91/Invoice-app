@@ -17,6 +17,7 @@ import {
   registerUserOnServer,
   updateUserRoleOnServer,
   updateUserAccessOnServer,
+  approveUserOnServer,
   deleteUserOnServer,
   fetchServerUsers,
 } from './superAdminApi';
@@ -254,6 +255,7 @@ export function registerOrUpdateUserAccess(
       role !== 'super_admin' &&
       existing.status !== 'unlimited' &&
       existing.status !== 'blocked' &&
+      existing.status !== 'pending' &&
       now > existing.expiresAt;
 
     profile = {
@@ -267,6 +269,12 @@ export function registerOrUpdateUserAccess(
       lastLoginString: new Date(now).toLocaleString(),
       status: isSuperAdmin
         ? 'unlimited'
+        : existing.status === 'blocked'
+        ? 'blocked'
+        : existing.status === 'pending'
+        ? 'pending' // Still awaiting Admin approval!
+        : existing.status === 'unlimited'
+        ? 'unlimited'
         : isExpired
         ? 'expired'
         : existing.status,
@@ -276,11 +284,12 @@ export function registerOrUpdateUserAccess(
     profiles[existingIndex] = profile;
   } else {
     // New user first-time registration under Super Admin!
+    // STRICT REQUIREMENT: Users CANNOT use for free! Admin approval is required.
     const role: UserRole = isSuperAdmin ? 'super_admin' : 'client';
-    const allowedDays = isSuperAdmin ? 99999 : settings.defaultAllowedDays;
+    const allowedDays = isSuperAdmin ? 99999 : 0;
     const expiresAt = isSuperAdmin
       ? now + 36500 * 86400000 // 100 years for super admin
-      : now + allowedDays * 86400000;
+      : now;
 
     profile = {
       userId: user.uid,
@@ -294,12 +303,12 @@ export function registerOrUpdateUserAccess(
       allowedDays,
       expiresAt,
       expiresAtString: formatDate(expiresAt),
-      status: isSuperAdmin ? 'unlimited' : 'active',
+      status: isSuperAdmin ? 'unlimited' : 'pending', // Pending Admin approval!
       lastLoginTime: now,
       lastLoginString: new Date(now).toLocaleString(),
       notes: isSuperAdmin
         ? 'Root Super Administrator & System Owner'
-        : `Registered under Super Admin (${allowedDays} days trial)`,
+        : 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
       unreadBySuperAdmin: !isSuperAdmin,
       permissions: getDefaultPermissions(role),
     };
@@ -341,6 +350,11 @@ export async function changeUserRole(userId: string, newRole: UserRole): Promise
     throw new Error('Super Admin role cannot be demoted');
   }
 
+  // STRICT: Only psgss91@gmail.com can hold admin or super_admin role
+  if (user.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase() && (newRole === 'super_admin' || newRole === 'admin')) {
+    throw new Error('Only psgss91@gmail.com can hold Admin or Super Admin role');
+  }
+
   const updated: UserAccessProfile = {
     ...user,
     role: newRole,
@@ -362,8 +376,18 @@ export async function changeUserRole(userId: string, newRole: UserRole): Promise
 }
 
 /**
+ * Check if an email belongs to the Admin / Super Admin (psgss91@gmail.com)
+ * STRICT SECURITY: ONLY psgss91@gmail.com can EVER be Admin or Super Admin.
+ */
+export function isUserAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+}
+
+/**
  * Check if the user is allowed to access the system.
  * Returns detailed access info: { isAllowed, isAdmin, isSuperAdmin, role, permissions, daysRemaining, isExpired, isBlocked, profile }
+ * STRICT: Only psgss91@gmail.com is granted isAdmin: true and isSuperAdmin: true.
  */
 export function checkUserAccessStatus(user: { uid: string; email: string | null } | null): {
   isAllowed: boolean;
@@ -374,6 +398,7 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
   daysRemaining: number;
   isExpired: boolean;
   isBlocked: boolean;
+  isPendingApproval: boolean;
   profile: UserAccessProfile | null;
 } {
   if (!user) {
@@ -386,12 +411,14 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
       daysRemaining: 0,
       isExpired: false,
       isBlocked: false,
+      isPendingApproval: true,
       profile: null,
     };
   }
 
   const userEmail = (user.email || '').trim().toLowerCase();
   const isSuperAdmin = userEmail === SUPER_ADMIN_EMAIL.toLowerCase();
+  const isAdmin = isSuperAdmin; // STRICT: ONLY psgss91@gmail.com can EVER be admin!
 
   // psgss91@gmail.com is always Super Admin with permanent unlimited access
   if (isSuperAdmin) {
@@ -404,6 +431,7 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
       daysRemaining: 99999,
       isExpired: false,
       isBlocked: false,
+      isPendingApproval: false,
       profile: null,
     };
   }
@@ -414,36 +442,58 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
   );
 
   if (!profile) {
-    // If user profile not found yet, grant default trial days as client
-    const settings = getAccessSettings();
+    // If user profile not found yet, access is NOT granted until Admin approves!
     return {
-      isAllowed: true,
+      isAllowed: false,
       isAdmin: false,
       isSuperAdmin: false,
       role: 'client',
       permissions: getDefaultPermissions('client'),
-      daysRemaining: settings.defaultAllowedDays,
+      daysRemaining: 0,
       isExpired: false,
       isBlocked: false,
+      isPendingApproval: true,
       profile: null,
     };
   }
 
-  const userRole: UserRole = profile.role || 'client';
-  const permissions: UserPermissions = profile.permissions || getDefaultPermissions(userRole);
-  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+  // Non-super-admin user roles: 'client' | 'editor' | 'manager' | 'viewer'
+  // NEVER grant super_admin or admin role or admin privileges to another email
+  const userRole: UserRole =
+    profile.role === 'super_admin' || profile.role === 'admin'
+      ? 'client'
+      : profile.role || 'client';
+  const permissions: UserPermissions =
+    profile.permissions || getDefaultPermissions(userRole);
+
+  // User awaiting Admin approval: NOT allowed until Admin approves!
+  if (profile.status === 'pending') {
+    return {
+      isAllowed: false,
+      isAdmin: false,
+      isSuperAdmin: false,
+      role: userRole,
+      permissions,
+      daysRemaining: 0,
+      isExpired: false,
+      isBlocked: false,
+      isPendingApproval: true,
+      profile,
+    };
+  }
 
   // Super Admin granted unlimited access
-  if (profile.status === 'unlimited' || userRole === 'super_admin') {
+  if (profile.status === 'unlimited') {
     return {
       isAllowed: true,
-      isAdmin,
-      isSuperAdmin: userRole === 'super_admin',
+      isAdmin: false,
+      isSuperAdmin: false,
       role: userRole,
       permissions,
       daysRemaining: 99999,
       isExpired: false,
       isBlocked: false,
+      isPendingApproval: false,
       profile,
     };
   }
@@ -452,13 +502,14 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
   if (profile.status === 'blocked') {
     return {
       isAllowed: false,
-      isAdmin,
+      isAdmin: false,
       isSuperAdmin: false,
       role: userRole,
       permissions,
       daysRemaining: 0,
       isExpired: false,
       isBlocked: true,
+      isPendingApproval: false,
       profile,
     };
   }
@@ -474,13 +525,14 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
     }
     return {
       isAllowed: false,
-      isAdmin,
+      isAdmin: false,
       isSuperAdmin: false,
       role: userRole,
       permissions,
       daysRemaining: 0,
       isExpired: true,
       isBlocked: false,
+      isPendingApproval: false,
       profile,
     };
   }
@@ -489,21 +541,69 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
 
   return {
     isAllowed: true,
-    isAdmin,
+    isAdmin: false,
     isSuperAdmin: false,
     role: userRole,
     permissions,
     daysRemaining,
     isExpired: false,
     isBlocked: false,
+    isPendingApproval: false,
     profile,
   };
+}
+
+/**
+ * Super Admin action: approve and activate a user's access
+ */
+export async function approveUserAccess(
+  userId: string,
+  allowedDays: number = 30,
+  role?: UserRole
+): Promise<UserAccessProfile | null> {
+  const profiles = getAllUserProfiles();
+  const index = profiles.findIndex((p) => p.userId === userId);
+  if (index === -1) return null;
+
+  const user = profiles[index];
+  const now = Date.now();
+  const days = allowedDays > 0 ? allowedDays : 30;
+  const isUnlimited = days >= 9999;
+  const newExpiresAt = isUnlimited ? now + 36500 * 86400000 : now + days * 86400000;
+  const targetRole =
+    role && user.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase() && role !== 'admin' && role !== 'super_admin'
+      ? role
+      : user.role;
+
+  const updated: UserAccessProfile = {
+    ...user,
+    role: targetRole,
+    status: isUnlimited ? 'unlimited' : 'active',
+    allowedDays: days,
+    expiresAt: newExpiresAt,
+    expiresAtString: formatDate(newExpiresAt),
+    unreadBySuperAdmin: false,
+    notes: `Approved by Super Admin on ${new Date().toLocaleDateString()}`,
+    permissions: getDefaultPermissions(targetRole),
+  };
+
+  profiles[index] = updated;
+  persistProfiles(profiles);
+
+  // Sync with central server
+  try {
+    await approveUserOnServer(userId, days, targetRole);
+  } catch (err) {
+    console.warn('Failed to sync user approval to server:', err);
+  }
+
+  return updated;
 }
 
 const STORAGE_KEY_GUEST = 'ps_invoice_guest_access';
 
 /**
- * Check guest access status
+ * Check guest access status - STRICT: Guests cannot use without Admin approval!
  */
 export function checkGuestAccessStatus(): {
   isAllowed: boolean;
@@ -511,52 +611,12 @@ export function checkGuestAccessStatus(): {
   isExpired: boolean;
   firstUsed: number;
 } {
-  const settings = getAccessSettings();
-  const allowedMs = settings.defaultAllowedDays * 86400000;
-  const now = Date.now();
-
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_GUEST);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY_GUEST, JSON.stringify({ firstUsed: now }));
-      return {
-        isAllowed: true,
-        daysRemaining: settings.defaultAllowedDays,
-        isExpired: false,
-        firstUsed: now,
-      };
-    }
-
-    const data = JSON.parse(raw);
-    const firstUsed = Number(data.firstUsed) || now;
-    const elapsed = now - firstUsed;
-
-    if (elapsed > allowedMs) {
-      return {
-        isAllowed: false,
-        daysRemaining: 0,
-        isExpired: true,
-        firstUsed,
-      };
-    }
-
-    const msRemaining = allowedMs - elapsed;
-    const daysRemaining = Math.max(1, Math.ceil(msRemaining / 86400000));
-
-    return {
-      isAllowed: true,
-      daysRemaining,
-      isExpired: false,
-      firstUsed,
-    };
-  } catch {
-    return {
-      isAllowed: true,
-      daysRemaining: settings.defaultAllowedDays,
-      isExpired: false,
-      firstUsed: now,
-    };
-  }
+  return {
+    isAllowed: false,
+    daysRemaining: 0,
+    isExpired: true,
+    firstUsed: Date.now(),
+  };
 }
 
 /**
@@ -693,6 +753,31 @@ export function createRenewalMailtoLink(profile?: UserAccessProfile | null, user
     `Registered Date: ${registered}\n` +
     `Expired Date: ${expired}\n` +
     `Allowed Days Given: ${profile?.allowedDays || 7} Days\n\n` +
+    `Thank you,\n` +
+    `${name}`;
+
+  return `mailto:${ADMIN_EMAIL}?subject=${subject}&body=${encodeURIComponent(body)}`;
+}
+
+/**
+ * Generate a pre-filled mailto link for pending user to request approval from psgss91@gmail.com
+ */
+export function createApprovalRequestMailtoLink(profile?: UserAccessProfile | null, userEmail?: string): string {
+  const email = profile?.email || userEmail || 'Registered User';
+  const name = profile?.displayName || 'PSN Invoice User';
+  const registered = profile?.firstLoginString || new Date().toLocaleDateString();
+
+  const subject = encodeURIComponent(`[PSN Invoice] Account Approval Request - ${email}`);
+
+  const body =
+    `Hello Administrator (${ADMIN_EMAIL}),\n\n` +
+    `I have registered on PSN Invoice and would like to request account approval.\n` +
+    `Please approve and activate my account so I can start using the system.\n\n` +
+    `--- USER DETAILS ---\n` +
+    `Name: ${name}\n` +
+    `Email: ${email}\n` +
+    `Registered Date: ${registered}\n` +
+    `Status: Awaiting Admin Approval\n\n` +
     `Thank you,\n` +
     `${name}`;
 

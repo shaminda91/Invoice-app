@@ -122,7 +122,7 @@ export interface UserAccessProfile {
   allowedDays: number; // e.g. 7 days by default
   expiresAt: number; // timestamp
   expiresAtString: string;
-  status: 'active' | 'expired' | 'blocked' | 'unlimited';
+  status: 'pending' | 'active' | 'expired' | 'blocked' | 'unlimited';
   lastLoginTime: number;
   lastLoginString: string;
   notes?: string;

@@ -111,7 +111,7 @@ interface ServerDatabase {
     allowedDays: number;
     expiresAt: number;
     expiresAtString: string;
-    status: 'active' | 'expired' | 'blocked' | 'unlimited';
+    status: 'pending' | 'active' | 'expired' | 'blocked' | 'unlimited';
     lastLoginTime: number;
     lastLoginString: string;
     notes?: string;
@@ -226,11 +226,16 @@ app.post('/api/users/register', (req, res) => {
 
   if (existingIndex >= 0) {
     const existing = db.users[existingIndex];
-    const role = isSuperAdmin ? 'super_admin' : existing.role || 'client';
+    // Non-super-admin can NEVER be super_admin or admin
+    const role = isSuperAdmin
+      ? 'super_admin'
+      : (existing.role === 'super_admin' || existing.role === 'admin' ? 'client' : existing.role || 'client');
     const status = isSuperAdmin
       ? 'unlimited'
       : existing.status === 'blocked'
       ? 'blocked'
+      : existing.status === 'pending'
+      ? 'pending'
       : existing.status === 'unlimited'
       ? 'unlimited'
       : now > existing.expiresAt
@@ -257,11 +262,12 @@ app.post('/api/users/register', (req, res) => {
     db.users[existingIndex] = profile;
   } else {
     // Brand new user registration under Super Admin!
+    // STRICT REQUIREMENT: Users CANNOT use for free! Admin approval is required.
     const role = isSuperAdmin ? 'super_admin' : 'client';
-    const allowedDays = isSuperAdmin ? 99999 : (db.defaultAllowedDays || 7);
+    const allowedDays = isSuperAdmin ? 99999 : 0;
     const expiresAt = isSuperAdmin
       ? now + 36500 * 86400000
-      : now + allowedDays * 86400000;
+      : now;
 
     profile = {
       userId: userId || `user_${now}_${Math.random().toString(36).substring(2, 8)}`,
@@ -275,12 +281,12 @@ app.post('/api/users/register', (req, res) => {
       allowedDays,
       expiresAt,
       expiresAtString: new Date(expiresAt).toLocaleDateString(),
-      status: isSuperAdmin ? 'unlimited' : 'active',
+      status: isSuperAdmin ? 'unlimited' : 'pending', // Pending Admin Approval!
       lastLoginTime: now,
       lastLoginString: new Date(now).toLocaleString(),
       notes: isSuperAdmin
         ? 'Root Super Administrator & System Owner'
-        : `Registered under Super Admin (${allowedDays} days trial)`,
+        : 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
       unreadBySuperAdmin: !isSuperAdmin, // Notify Super Admin of new client!
       deviceInfo,
       browser,
@@ -323,6 +329,11 @@ app.put('/api/users/:userId/role', (req, res) => {
     return res.status(403).json({ error: 'Root Super Admin role cannot be modified' });
   }
 
+  // Strictly: only psgss91@gmail.com can hold admin or super_admin role
+  if (user.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase() && (role === 'super_admin' || role === 'admin')) {
+    return res.status(403).json({ error: 'Only psgss91@gmail.com can hold Admin or Super Admin role' });
+  }
+
   const updated = {
     ...user,
     role,
@@ -352,7 +363,7 @@ app.put('/api/users/:userId/access', (req, res) => {
 
   let newAllowedDays = user.allowedDays;
   let newExpiresAt = user.expiresAt;
-  let newStatus = status || user.status;
+  let newStatus: 'pending' | 'active' | 'expired' | 'blocked' | 'unlimited' = (status || user.status) as any;
 
   if (typeof allowedDays === 'number') {
     newAllowedDays = allowedDays;
@@ -371,6 +382,45 @@ app.put('/api/users/:userId/access', (req, res) => {
     expiresAtString: new Date(newExpiresAt).toLocaleDateString(),
     status: newStatus,
     notes: notes !== undefined ? notes : user.notes,
+  };
+
+  db.users[index] = updated;
+  saveDatabase(db);
+
+  res.json({ success: true, profile: updated });
+});
+
+// 4.1. Super Admin approves and activates a pending user
+app.post('/api/users/:userId/approve', (req, res) => {
+  const { userId } = req.params;
+  const { allowedDays, role } = req.body;
+
+  const db = loadDatabase();
+  const index = db.users.findIndex((u) => u.userId === userId);
+  if (index === -1) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const user = db.users[index];
+  const now = Date.now();
+  const days = typeof allowedDays === 'number' && allowedDays > 0 ? allowedDays : 30;
+  const isUnlimited = days >= 9999;
+  const newExpiresAt = isUnlimited ? now + 36500 * 86400000 : now + days * 86400000;
+  const targetRole =
+    role && user.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase() && role !== 'admin' && role !== 'super_admin'
+      ? role
+      : user.role;
+
+  const updated = {
+    ...user,
+    role: targetRole,
+    status: (isUnlimited ? 'unlimited' : 'active') as 'unlimited' | 'active',
+    allowedDays: days,
+    expiresAt: newExpiresAt,
+    expiresAtString: new Date(newExpiresAt).toLocaleDateString(),
+    unreadBySuperAdmin: false,
+    notes: `Approved by Super Admin on ${new Date().toLocaleDateString()}`,
+    permissions: getDefaultPermissions(targetRole),
   };
 
   db.users[index] = updated;
@@ -414,6 +464,7 @@ app.get('/api/system/status', (req, res) => {
   const db = loadDatabase();
   const clients = db.users.filter((u) => u.userId?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
   const unread = clients.filter((c) => c.unreadBySuperAdmin);
+  const pending = clients.filter((c) => c.status === 'pending');
 
   res.json({
     status: 'online',
@@ -421,6 +472,7 @@ app.get('/api/system/status', (req, res) => {
     totalAccounts: db.users.length,
     registeredClients: clients.length,
     unreadRegistrations: unread.length,
+    pendingApprovals: pending.length,
     newestClients: unread.map((c) => ({
       userId: c.userId,
       email: c.email,
@@ -434,8 +486,12 @@ app.get('/api/system/status', (req, res) => {
 // VITE DEV MIDDLEWARE OR PRODUCTION STATIC SERVING
 // -------------------------------------------------------------
 async function startServer() {
-  if (process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(__dirname, 'dist'))) {
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+    });
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({

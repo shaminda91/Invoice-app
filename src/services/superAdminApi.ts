@@ -155,7 +155,7 @@ export async function updateUserAccessOnServer(
   userId: string,
   params: {
     allowedDays?: number;
-    status?: 'active' | 'expired' | 'blocked' | 'unlimited';
+    status?: 'pending' | 'active' | 'expired' | 'blocked' | 'unlimited';
     notes?: string;
   }
 ): Promise<UserAccessProfile | null> {
@@ -186,6 +186,47 @@ export async function updateUserAccessOnServer(
     return null;
   } catch (err) {
     console.error('Error updating user access on server:', err);
+    throw err;
+  }
+}
+
+/**
+ * Super Admin action: approve and activate a user's access
+ */
+export async function approveUserOnServer(
+  userId: string,
+  allowedDays: number = 30,
+  role?: UserRole
+): Promise<UserAccessProfile | null> {
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(userId)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allowedDays, role }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to approve user');
+    }
+
+    const data = await res.json();
+    if (data.profile) {
+      const cached = getCachedProfiles();
+      const idx = cached.findIndex((p) => p.userId === userId);
+      if (idx >= 0) {
+        cached[idx] = data.profile;
+      } else {
+        cached.unshift(data.profile);
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(cached));
+      } catch {}
+      return data.profile;
+    }
+    return null;
+  } catch (err) {
+    console.error('Error approving user on server:', err);
     throw err;
   }
 }

@@ -27,12 +27,14 @@ import {
   syncProfilesToDrive,
   fetchProfilesFromDrive,
   changeUserRole,
+  approveUserAccess,
   getRoleBadgeClass,
   getRoleLabel,
 } from '../services/userAccessManager';
 import {
   fetchServerUsers,
   markRegistrationsAsReadOnServer,
+  updateUserAccessOnServer,
 } from '../services/superAdminApi';
 import {
   Shield,
@@ -60,6 +62,7 @@ import {
   ChevronDown,
   Bell,
   Filter,
+  Hourglass,
 } from 'lucide-react';
 import { CloudServerManagerTab } from './CloudServerManagerTab';
 import { CloudSyncSummary } from '../services/cloudServer';
@@ -244,6 +247,20 @@ export function AdminLoginLogsModal({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
+  const handleApproveUser = async (userId: string, days: number = 30) => {
+    try {
+      const updated = await approveUserAccess(userId, days);
+      if (updated) {
+        setUserProfiles((prev) =>
+          prev.map((u) => (u.userId === userId ? updated : u))
+        );
+        showToast(`${updated.displayName} - ${days >= 9999 ? 'Unlimited' : days + 'd'} access approved!`);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to approve user');
+    }
+  };
+
   // Filtered Users with Search Term and Role Filter
   const filteredUsers = userProfiles.filter((u) => {
     const matchesSearch =
@@ -252,7 +269,11 @@ export function AdminLoginLogsModal({
       (u.role && u.role.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const matchesRole =
-      roleFilter === 'all' || (u.role || 'client') === roleFilter;
+      roleFilter === 'all'
+        ? true
+        : roleFilter === 'pending'
+        ? u.status === 'pending'
+        : (u.role || 'client') === roleFilter;
 
     return matchesSearch && matchesRole;
   });
@@ -271,6 +292,7 @@ export function AdminLoginLogsModal({
 
   // Stats calculation
   const totalUsersCount = userProfiles.length;
+  const pendingUsersCount = userProfiles.filter((u) => u.status === 'pending').length;
   const activeUsersCount = userProfiles.filter(
     (u) => u.status === 'active' || u.status === 'unlimited'
   ).length;
@@ -356,6 +378,42 @@ export function AdminLoginLogsModal({
     }
   };
 
+  const userEmail = (user?.email || '').trim().toLowerCase();
+  const isAuthorizedSuperAdmin =
+    userEmail === ADMIN_EMAIL.toLowerCase() ||
+    userEmail === SUPER_ADMIN_EMAIL.toLowerCase();
+
+  // If user is not Super Admin (psgss91@gmail.com), block access completely
+  if (!isAuthorizedSuperAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/70 backdrop-blur-xs animate-in fade-in duration-200">
+        <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-rose-200 p-6 text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+            <Lock className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-slate-900">
+              පරිපාලක ප්‍රවේශය සීමා කර ඇත (Access Denied)
+            </h3>
+            <p className="text-xs text-slate-600 mt-2">
+              මෙම Admin Control Panel එකට පිවිසිය හැක්කේ ප්‍රධාන පරිපාලක <strong>{SUPER_ADMIN_EMAIL}</strong> ගිණුමට පමණි.
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              ඔබ ලොග් වී ඇති ගිණුම: <span className="font-mono font-bold text-slate-800">{userEmail || 'Guest / Standard User'}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+          >
+            {t.close}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
@@ -411,13 +469,40 @@ export function AdminLoginLogsModal({
         )}
 
         {/* METRICS ROW */}
-        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50 grid grid-cols-2 sm:grid-cols-5 gap-3">
           <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
             <div className="text-[11px] text-slate-500 font-medium">
               {t.registeredUsers}
             </div>
             <div className="text-lg font-extrabold text-slate-900 mt-0.5">
               {totalUsersCount}
+            </div>
+          </div>
+
+          <div className={`border rounded-xl p-3 shadow-2xs cursor-pointer transition-all ${
+            pendingUsersCount > 0
+              ? 'bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/40'
+              : 'bg-white border-slate-200'
+          }`}
+            onClick={() => {
+              setActiveTab('users');
+              setRoleFilter('pending');
+            }}
+            title="Click to view users waiting for approval"
+          >
+            <div className="text-[11px] text-amber-800 font-bold flex items-center justify-between">
+              <span>Pending Approval</span>
+              {pendingUsersCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+              )}
+            </div>
+            <div className="text-lg font-black text-amber-700 mt-0.5 flex items-center gap-1">
+              <span>{pendingUsersCount}</span>
+              {pendingUsersCount > 0 && (
+                <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-1.5 py-0.2 rounded-full">
+                  Needs Approval
+                </span>
+              )}
             </div>
           </div>
 
@@ -701,10 +786,9 @@ export function AdminLoginLogsModal({
                         onChange={(e) => setNewClientRole(e.target.value as UserRole)}
                         className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-bold"
                       >
-                        <option value="client">👤 Client (සේවාලාභියා)</option>
+                        <option value="client">👤 User / Client (සේවාලාභියා)</option>
                         <option value="editor">✍️ Editor (සකසන්නා)</option>
                         <option value="manager">💼 Manager (කළමනාකරු)</option>
-                        <option value="admin">🛡️ Admin (පරිපාලක)</option>
                         <option value="viewer">👁️ Viewer (නරඹන්නා)</option>
                       </select>
                     </div>
@@ -767,10 +851,11 @@ export function AdminLoginLogsModal({
             {/* ROLE FILTER QUICK SELECTOR BUTTONS */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
               <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1 mr-1 shrink-0">
-                <Filter className="w-3.5 h-3.5" /> Filter Role:
+                <Filter className="w-3.5 h-3.5" /> Filter:
               </span>
               {[
-                { id: 'all', label: 'All', count: userProfiles.length },
+                { id: 'all', label: 'All Users', count: userProfiles.length },
+                { id: 'pending', label: '⏳ Pending Approval', count: pendingUsersCount, isAlert: pendingUsersCount > 0 },
                 { id: 'super_admin', label: '👑 Super Admin', count: userProfiles.filter((u) => u.role === 'super_admin' || u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()).length },
                 { id: 'admin', label: '🛡️ Admin', count: userProfiles.filter((u) => u.role === 'admin').length },
                 { id: 'manager', label: '💼 Manager', count: userProfiles.filter((u) => u.role === 'manager').length },
@@ -785,18 +870,55 @@ export function AdminLoginLogsModal({
                   className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
                     roleFilter === rf.id
                       ? 'bg-slate-900 text-white shadow-2xs'
+                      : (rf as any).isAlert
+                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300'
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >
                   <span>{rf.label}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                    roleFilter === rf.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    roleFilter === rf.id
+                      ? 'bg-white/20 text-white'
+                      : (rf as any).isAlert
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-slate-200 text-slate-700'
                   }`}>
                     {rf.count}
                   </span>
                 </button>
               ))}
             </div>
+
+            {/* PENDING APPROVAL ALERT BANNER */}
+            {pendingUsersCount > 0 && (
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2 text-xs shadow-2xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0">
+                    <Hourglass className="w-4 h-4 animate-spin" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-amber-950 flex items-center gap-1.5">
+                      <span>අනුමැතිය බලාපොරොත්තුවෙන් සිටින නව පරිශීලකයින්: {pendingUsersCount}</span>
+                      <span className="bg-amber-200 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                        Action Needed
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-800">
+                      පරිශීලකයින්ට නොමිලේ පද්ධතිය භාවිත කළ නොහැකි අතර ප්‍රධාන පරිපාලක ({SUPER_ADMIN_EMAIL}) ගේ අනුමැතිය අවශ්‍ය වේ. පහතින් අනුමත කරන්න.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRoleFilter('pending')}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-xs transition-colors cursor-pointer"
+                  >
+                    View Pending ({pendingUsersCount})
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* USERS TABLE */}
             {filteredUsers.length === 0 ? (
@@ -886,12 +1008,10 @@ export function AdminLoginLogsModal({
                                     )} ${isUpdatingRoleId === user.userId ? 'opacity-50 pointer-events-none' : ''}`}
                                     title={t.changeRole}
                                   >
-                                    <option value="client">👤 Client (සේවාලාභියා)</option>
+                                    <option value="client">👤 User / Client (සේවාලාභියා)</option>
                                     <option value="editor">✍️ Editor (සකසන්නා)</option>
                                     <option value="manager">💼 Manager (කළමනාකරු)</option>
-                                    <option value="admin">🛡️ Admin (පරිපාලක)</option>
                                     <option value="viewer">👁️ Viewer (නරඹන්නා)</option>
-                                    <option value="super_admin">👑 Super Admin</option>
                                   </select>
                                   <ChevronDown className="w-3.5 h-3.5 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
                                 </div>
@@ -960,6 +1080,11 @@ export function AdminLoginLogsModal({
                                   <InfinityIcon className="w-3 h-3" />
                                   <span>Unlimited</span>
                                 </span>
+                              ) : user.status === 'pending' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                                  <Hourglass className="w-3 h-3 text-amber-700" />
+                                  <span>⏳ Awaiting Approval</span>
+                                </span>
                               ) : user.status === 'blocked' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
                                   <Lock className="w-3 h-3" />
@@ -982,6 +1107,39 @@ export function AdminLoginLogsModal({
                             <td className="px-4 py-3 text-right">
                               {isAdminUser ? (
                                 <span className="text-[11px] text-slate-400 italic">Permanent Admin</span>
+                              ) : user.status === 'pending' ? (
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  {/* QUICK APPROVE 30 DAYS */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveUser(user.userId, 30)}
+                                    className="px-2.5 py-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                                    title="Approve user with 30 days access"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Approve (30d)</span>
+                                  </button>
+
+                                  {/* QUICK APPROVE UNLIMITED */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveUser(user.userId, 99999)}
+                                    className="px-2 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-md transition-colors cursor-pointer"
+                                    title="Approve user with Unlimited access"
+                                  >
+                                    <span>Approve (∞)</span>
+                                  </button>
+
+                                  {/* DELETE */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteUser(user.userId, user.email)}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                    title="Reject & Delete User"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               ) : (
                                 <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                   {/* +7 DAYS */}
@@ -1018,17 +1176,21 @@ export function AdminLoginLogsModal({
                                     <InfinityIcon className="w-3 h-3 inline mr-0.5" />
                                   </button>
 
-                                  {/* EXPIRE / BLOCK */}
-                                  {!isExpired && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleExpireImmediately(user.userId)}
-                                      className="px-2 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors cursor-pointer"
-                                      title="Expire User Access Immediately"
-                                    >
-                                      Expire
-                                    </button>
-                                  )}
+                                  {/* REVOKE / SET PENDING */}
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (window.confirm(`Revoke approval for ${user.displayName}? User will be locked until approved again.`)) {
+                                        await updateUserAccessOnServer(user.userId, { status: 'pending', allowedDays: 0 });
+                                        refreshData();
+                                        showToast(`${user.displayName} access revoked - set to Pending Approval`);
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md transition-colors cursor-pointer"
+                                    title="Revoke Approval (Lock until re-approved)"
+                                  >
+                                    Revoke
+                                  </button>
 
                                   {/* DELETE */}
                                   <button

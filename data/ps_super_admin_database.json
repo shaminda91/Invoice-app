@@ -1,0 +1,33 @@
+{
+  "superAdminEmail": "psgss91@gmail.com",
+  "defaultAllowedDays": 7,
+  "users": [
+    {
+      "userId": "DMCr4uA7vXVV7Nx6mK6RzbOD7cD3",
+      "email": "psgss91@gmail.com",
+      "displayName": "Pramesh Shaminda",
+      "role": "super_admin",
+      "parentAdminEmail": "psgss91@gmail.com",
+      "firstLoginTime": 1790674991739,
+      "firstLoginString": "9/29/2026",
+      "allowedDays": 99999,
+      "expiresAt": 4944274991739,
+      "expiresAtString": "Permanent / Unlimited",
+      "status": "unlimited",
+      "lastLoginTime": 1790675542471,
+      "lastLoginString": "9/29/2026, 9:52:22 AM",
+      "notes": "Root Super Administrator & System Owner",
+      "unreadBySuperAdmin": false,
+      "permissions": {
+        "canCreateInvoice": true,
+        "canEditInvoice": true,
+        "canDeleteInvoice": true,
+        "canExportPDF": true,
+        "canManageClients": true,
+        "canViewReports": true,
+        "canManageUsers": true
+      },
+      "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocKdiigjdzBOHLuccLiD3I_WprJJORgbvbGS35mPlBf-2WmsFEkJ=s96-c"
+    }
+  ]
+}

@@ -273,31 +273,33 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
                 Cloud Server & Storage
               </label>
 
-              {/* Master Cloud Server */}
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenCloudServer();
-                }}
-                className="w-full flex items-center justify-between p-3 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 transition-colors cursor-pointer text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-                    <Cloud className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
-                      <span>Cloud Server</span>
-                      <span className="text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">
-                        psgss91
-                      </span>
+              {/* Master Cloud Server (Only for psgss91@gmail.com) */}
+              {accessCheck.isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenCloudServer();
+                  }}
+                  className="w-full flex items-center justify-between p-3 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 transition-colors cursor-pointer text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                      <Cloud className="w-5 h-5" />
                     </div>
-                    <p className="text-[11px] text-indigo-700">Master Backup & Updates</p>
+                    <div>
+                      <div className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                        <span>Cloud Server</span>
+                        <span className="text-[10px] bg-indigo-200 text-indigo-900 px-1.5 py-0.2 rounded font-mono font-bold">
+                          psgss91
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-indigo-700">Master Backup & Updates</p>
+                    </div>
                   </div>
-                </div>
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              </button>
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                </button>
+              )}
 
               {/* Google Drive Auto-Save */}
               <button
