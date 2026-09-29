@@ -331,6 +331,7 @@ app.post('/api/users/request-approval', (req, res) => {
       email: cleanEmail,
       displayName: displayName || existing.displayName || cleanEmail.split('@')[0],
       photoURL: photoURL || existing.photoURL,
+      status: 'pending',
       lastLoginTime: now,
       lastLoginString: new Date(now).toLocaleString(),
       unreadBySuperAdmin: true,
@@ -395,10 +396,11 @@ app.post('/api/users/email-admin-request', (req, res) => {
       email: cleanEmail,
       displayName: displayName || existing.displayName || cleanEmail.split('@')[0],
       photoURL: photoURL || existing.photoURL,
+      status: 'pending',
       lastLoginTime: now,
       lastLoginString: new Date(now).toLocaleString(),
       unreadBySuperAdmin: true,
-      notes: note || `Email Approval Requested on ${new Date(now).toLocaleString()}`,
+      notes: note || `Email Approval Requested on ${new Date(now).toLocaleString()} (පරිපාලකගේ අනුමැතිය ඉල්ලා ඇත)`,
     };
     db.users[existingIndex] = profile;
   } else {

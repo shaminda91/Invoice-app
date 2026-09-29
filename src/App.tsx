@@ -81,6 +81,7 @@ import {
   Crown,
   Bell,
   Hourglass,
+  RefreshCw,
 } from 'lucide-react';
 import { MobileActionDrawer } from './components/MobileActionDrawer';
 
@@ -242,9 +243,21 @@ export default function App() {
   const [lastCloudSync, setLastCloudSync] = useState<CloudSyncSummary | null>(() => getStoredCloudSyncMeta());
   const [accessRefreshCounter, setAccessRefreshCounter] = useState<number>(0);
   const [loginRecords, setLoginRecords] = useState<UserLoginRecord[]>(() => getLoginRecords());
+  const [serverUsers, setServerUsers] = useState<UserAccessProfile[]>(() => getAllUserProfiles());
 
   // Active translation dictionary
   const t = translations[language];
+
+  // Helper to load fresh server users and update reactivity
+  const loadServerUsers = async () => {
+    try {
+      const res = await fetchServerUsers();
+      if (res && Array.isArray(res.users) && res.users.length > 0) {
+        setServerUsers(res.users);
+        setAccessRefreshCounter((c) => c + 1);
+      }
+    } catch {}
+  };
 
   // Initialize Firebase Auth listener for Google Drive & User Logins
   useEffect(() => {
@@ -270,9 +283,7 @@ export default function App() {
         }
 
         // Fetch latest registered profiles from server so user status updates immediately
-        fetchServerUsers().then(() => {
-          setAccessRefreshCounter((c) => c + 1);
-        }).catch(() => {});
+        loadServerUsers();
 
         // If super admin logs in, also auto-fetch from Google Drive
         if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
@@ -297,27 +308,15 @@ export default function App() {
     };
   }, []);
 
-  // Immediate fetch on application mount so server database profiles are loaded
+  // Continuous real-time synchronization with server database every 3 seconds
   useEffect(() => {
-    fetchServerUsers().then(() => {
-      setAccessRefreshCounter((c) => c + 1);
-    }).catch(() => {});
-  }, []);
-
-  // Periodically poll server database for pending registrations if logged in as Super Admin
-  useEffect(() => {
-    if (!googleUser || googleUser.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-      return;
-    }
-
+    loadServerUsers();
     const pollInterval = setInterval(() => {
-      fetchServerUsers().then(() => {
-        setAccessRefreshCounter((c) => c + 1);
-      }).catch(() => {});
-    }, 3500);
+      loadServerUsers();
+    }, 3000);
 
     return () => clearInterval(pollInterval);
-  }, [googleUser]);
+  }, []);
 
   // Persist Drive auto-save preference
   const handleToggleAutoSave = (enabled: boolean) => {
@@ -1000,8 +999,9 @@ export default function App() {
 
   // Registered clients stats for Admin notification message
   const registeredClients = React.useMemo(() => {
-    return getAllUserProfiles().filter((p) => p.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase());
-  }, [accessRefreshCounter, googleUser]);
+    const list = serverUsers.length > 0 ? serverUsers : getAllUserProfiles();
+    return list.filter((p) => p.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase());
+  }, [serverUsers, accessRefreshCounter, googleUser]);
 
   const pendingClientsCount = React.useMemo(() => {
     return registeredClients.filter((p) => p.status === 'pending').length;
@@ -1363,9 +1363,9 @@ export default function App() {
               <span>{t.print}</span>
             </button>
 
-            {/* USER PROFILE & ADMIN SECTION (DESKTOP) */}
+            {/* USER PROFILE & ADMIN SECTION */}
             {googleUser ? (
-              <div className="hidden lg:flex items-center gap-1.5 pl-2 border-l border-slate-200">
+              <div className="flex items-center gap-1 sm:gap-1.5 pl-1.5 sm:pl-2 border-l border-slate-200">
                 {/* ADMIN / SUPER ADMIN CONTROL PANEL BUTTON */}
                 {accessCheck.isSuperAdmin ? (
                   <button
@@ -1375,11 +1375,11 @@ export default function App() {
                       setAdminModalTab('users');
                       setIsAdminLogsModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 border border-amber-400 rounded-lg transition-all cursor-pointer shadow-xs"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-black text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 border border-amber-400 rounded-lg transition-all cursor-pointer shadow-xs"
                     title={t.superAdminTitle}
                   >
                     <Crown className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
-                    <span>Super Admin</span>
+                    <span className="hidden sm:inline">Super Admin</span>
                     <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-1.5 py-0.2 rounded-full">
                       {registeredClients.length}
                     </span>
@@ -1392,13 +1392,13 @@ export default function App() {
                       setAdminModalTab('users');
                       setIsAdminLogsModalOpen(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold text-indigo-950 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 text-xs font-bold text-indigo-950 bg-indigo-50 hover:bg-indigo-100 border border-indigo-300 rounded-lg transition-colors cursor-pointer shadow-2xs"
                     title={t.adminPanel}
                   >
                     <Shield className="w-3.5 h-3.5 text-indigo-600" />
                     <span className="hidden md:inline">{t.adminPanel}</span>
                     <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                      {registeredClients.length} Clients
+                      {registeredClients.length}
                     </span>
                   </button>
                 ) : null}
@@ -1416,7 +1416,7 @@ export default function App() {
 
                 {/* USER PROFILE BADGE */}
                 <div
-                  className="flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg"
+                  className="hidden md:flex items-center gap-2 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg"
                   title={`${t.loggedInAs}: ${googleUser.email}`}
                 >
                   {googleUser.photoURL ? (
@@ -1446,7 +1446,7 @@ export default function App() {
                   type="button"
                   id="btn-sign-out"
                   onClick={handleSignOut}
-                  className="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                  className="p-1.5 sm:p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
                   title={t.logout}
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -1496,6 +1496,25 @@ export default function App() {
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={async () => {
+                  await loadServerUsers();
+                  showToast(
+                    language === 'si'
+                      ? '✓ සේවාලාභී දත්ත සහ අනුමැති ඉල්ලීම් සාර්ථකව යාවත්කාලීන විය!'
+                      : language === 'ta'
+                      ? '✓ வாடிக்கையாளர் தரவு வெற்றிகரமாக புதுப்பிக்கப்பட்டது!'
+                      : '✓ Client data & approval requests updated successfully!'
+                  );
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-lg font-bold text-[11px] border border-slate-700 transition-colors cursor-pointer"
+                title="Refresh from server"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{language === 'si' ? 'යාවත්කාලීන කරන්න' : 'Refresh'}</span>
+              </button>
+
               {pendingClientsCount > 0 && (
                 <button
                   type="button"
