@@ -68,7 +68,7 @@ export function AccessExpiredScreen({
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
             <Receipt className="w-4 h-4" />
           </div>
-          <span className="font-bold text-sm tracking-tight text-white">PS Invoice</span>
+          <span className="font-bold text-sm tracking-tight text-white">PS Quick Invoice</span>
         </div>
         <div className="text-xs text-slate-400">
           <span className="hidden sm:inline">Signed in as: </span>
@@ -115,7 +115,7 @@ export function AccessExpiredScreen({
                 </>
               ) : (
                 <>
-                  Your {allowedDays}-day trial period for PS Invoice has expired. To renew or update your
+                  Your {allowedDays}-day trial period for PS Quick Invoice has expired. To renew or update your
                   access, please contact the administrator (
                   <span className="text-indigo-300 font-mono font-bold">{ADMIN_EMAIL}</span>
                   ).
@@ -212,7 +212,7 @@ export function AccessExpiredScreen({
 
       {/* FOOTER */}
       <footer className="max-w-4xl mx-auto w-full py-3 text-center text-xs text-slate-500 border-t border-slate-800">
-        PS Invoice • Admin: {ADMIN_EMAIL} • Ps ebay solution
+        PS Quick Invoice • Admin: {ADMIN_EMAIL} • Ps ebay solution
       </footer>
     </div>
   );

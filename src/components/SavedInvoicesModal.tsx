@@ -344,7 +344,7 @@ export const SavedInvoicesModal: React.FC<SavedInvoicesModalProps> = ({
       </head>
       <body>
         <div class="header">
-          <h1>PS Invoice - Financial & Sales Report</h1>
+          <h1>PS Quick Invoice - Financial & Sales Report</h1>
           <div class="meta">
             <strong>Period:</strong> ${reportTotals.periodLabel} | 
             <strong>Generated:</strong> ${new Date().toLocaleString()} | 

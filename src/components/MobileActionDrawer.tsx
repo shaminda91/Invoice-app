@@ -503,7 +503,7 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
 
           {/* DRAWER FOOTER */}
           <div className="p-3 bg-slate-50 border-t border-slate-200 text-center text-[10px] text-slate-400">
-            PS Invoice • Responsive Phone & Tablet Edition
+            PS Quick Invoice • Responsive Phone & Tablet Edition
           </div>
         </div>
       </div>

@@ -410,7 +410,7 @@ export interface Translations {
 
 export const translations: Record<AppLanguage, Translations> = {
   en: {
-    appName: 'PS Invoice',
+    appName: 'PS Quick Invoice',
     appBadge: 'Quick & Professional',
     saved: 'Saved',
     newInvoice: 'New Invoice',
@@ -652,7 +652,7 @@ export const translations: Record<AppLanguage, Translations> = {
     signInWithGoogle: 'Sign in with Google',
     connectingGoogle: 'Connecting to Google...',
     phonePermissionNotice: 'Sign in from your phone or browser to give permission to save invoices directly to your Google Drive.',
-    driveFolderCreated: 'Saved to "PS Invoice - Backup" folder in your Drive',
+    driveFolderCreated: 'Saved to "PS Quick Invoice - Backup" folder in your Drive',
     toastDriveSaved: 'Saved to Google Drive successfully',
     toastDriveFailed: 'Failed to sync to Google Drive',
 
@@ -707,7 +707,7 @@ export const translations: Record<AppLanguage, Translations> = {
 
     // Login & Admin Tracking
     login: 'Login',
-    loginTitle: 'Welcome to PS Invoice',
+    loginTitle: 'Welcome to PS Quick Invoice',
     loginSubtitle: 'Professional invoice generator with Google Drive cloud backup',
     continueAsGuest: 'Continue as Guest (No Cloud Sync)',
     loginBenefit1Title: 'Instant PDF & Excel Export',
@@ -818,7 +818,7 @@ export const translations: Record<AppLanguage, Translations> = {
   },
 
   si: {
-    appName: 'PS Invoice',
+    appName: 'PS Quick Invoice',
     appBadge: 'පහසු සහ වෘත්තීය',
     saved: 'සුරැකි ලිපිගොනු',
     newInvoice: 'නව ඉන්වොයිසිය',
@@ -1060,7 +1060,7 @@ export const translations: Record<AppLanguage, Translations> = {
     signInWithGoogle: 'Sign in with Google (Google ගිණුමෙන් ඇතුල් වන්න)',
     connectingGoogle: 'Google වෙත සම්බන්ධ වෙමින්...',
     phonePermissionNotice: 'ඔබගේ දුරකථනයෙන් Google Drive වෙත ඉන්වොයිසි Auto Save කරගැනීමට මෙතැනින් Google ගිණුමට අවසර ලබා දෙන්න.',
-    driveFolderCreated: 'ඔබගේ Drive හි "PS Invoice - Backup" ෆෝල්ඩරයේ සුරැකේ',
+    driveFolderCreated: 'ඔබගේ Drive හි "PS Quick Invoice - Backup" ෆෝල්ඩරයේ සුරැකේ',
     toastDriveSaved: 'Google Drive වෙත සාර්ථකව සුරැකිණි',
     toastDriveFailed: 'Google Drive වෙත සුරැකීම අසාර්ථක විය',
 
@@ -1115,7 +1115,7 @@ export const translations: Record<AppLanguage, Translations> = {
 
     // Login & Admin Tracking
     login: 'පිවිසෙන්න',
-    loginTitle: 'PS Invoice වෙත සාදරයෙන් පිළිගනිමු',
+    loginTitle: 'PS Quick Invoice වෙත සාදරයෙන් පිළිගනිමු',
     loginSubtitle: 'Google Drive Cloud Auto-Save සහ වෘත්තීය ඉන්වොයිස් පද්ධතිය',
     continueAsGuest: 'ආගන්තුකයෙකු ලෙස ඇතුල් වන්න (Guest Mode)',
     loginBenefit1Title: 'ක්ෂණික PDF සහ Excel ලබා ගැනීම',
