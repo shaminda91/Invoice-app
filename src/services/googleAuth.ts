@@ -1,0 +1,170 @@
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  User,
+  signOut,
+  signInWithCredential,
+} from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { SocialLogin } from '@capgo/capacitor-social-login';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+export const auth = getAuth(app);
+
+export const DRIVE_SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',
+];
+
+const provider = new GoogleAuthProvider();
+DRIVE_SCOPES.forEach((scope) => provider.addScope(scope));
+provider.setCustomParameters({
+  prompt: 'consent',
+  access_type: 'offline',
+});
+
+const WEB_CLIENT_ID =
+  '230263541714-0gf2432jk93lql4sur3dte7o846u8g1b.apps.googleusercontent.com';
+
+let isSigningIn = false;
+let cachedAccessToken: string | null = null;
+let tokenExpiryTime = 0;
+let nativeGoogleInitialized = false;
+
+const initNativeGoogle = async () => {
+  if (!Capacitor.isNativePlatform() || nativeGoogleInitialized) return;
+
+  await SocialLogin.initialize({
+    google: {
+      webClientId: WEB_CLIENT_ID,
+      mode: 'online',
+    },
+  });
+
+  nativeGoogleInitialized = true;
+};
+
+/**
+ * Initialize auth state listener. Call this on app load.
+ */
+export const initAuth = (
+  onAuthSuccess?: (user: User, token: string | null) => void,
+  onAuthFailure?: () => void
+) => {
+  return onAuthStateChanged(auth, async (user: User | null) => {
+    if (user) {
+      if (cachedAccessToken && Date.now() < tokenExpiryTime) {
+        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+      } else {
+        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
+      }
+    } else {
+      cachedAccessToken = null;
+      tokenExpiryTime = 0;
+      if (onAuthFailure) onAuthFailure();
+    }
+  });
+};
+
+/**
+ * Sign in with Google and request Google Drive access.
+ * Native Android uses Credential Manager.
+ * Web keeps the existing Firebase popup flow.
+ */
+export const signInWithGoogleDrive = async (): Promise<{
+  user: User;
+  accessToken: string;
+}> => {
+  try {
+    isSigningIn = true;
+
+    if (Capacitor.isNativePlatform()) {
+      await initNativeGoogle();
+
+      const login = await SocialLogin.login({
+        provider: 'google',
+        options: {
+          scopes: ['email', 'profile', ...DRIVE_SCOPES],
+          filterByAuthorizedAccounts: false,
+        },
+      });
+
+      const idToken = login.result?.idToken;
+
+      if (!idToken) {
+        throw new Error('Google ID token was not returned');
+      }
+
+      const credential = GoogleAuthProvider.credential(idToken);
+      const firebaseResult = await signInWithCredential(auth, credential);
+
+      const accessToken = login.result?.accessToken?.token;
+
+      if (!accessToken) {
+        throw new Error('Google Drive access token was not returned');
+      }
+
+      cachedAccessToken = accessToken;
+      tokenExpiryTime = Date.now() + 50 * 60 * 1000;
+
+      return {
+        user: firebaseResult.user,
+        accessToken: cachedAccessToken,
+      };
+    }
+
+    // Existing Web login flow
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+
+    if (!credential?.accessToken) {
+      throw new Error('Google Drive access token was not returned');
+    }
+
+    cachedAccessToken = credential.accessToken;
+    tokenExpiryTime = Date.now() + 50 * 60 * 1000;
+
+    return {
+      user: result.user,
+      accessToken: cachedAccessToken,
+    };
+  } catch (error: any) {
+    console.error('Google Sign In error:', error);
+    throw error;
+  } finally {
+    isSigningIn = false;
+  }
+};
+
+/**
+ * Get current in-memory access token.
+ */
+export const getDriveAccessToken = (): string | null => {
+  if (cachedAccessToken && Date.now() < tokenExpiryTime) {
+    return cachedAccessToken;
+  }
+
+  return cachedAccessToken;
+};
+
+/**
+ * Sign out user and clear in-memory token.
+ */
+export const logOutGoogle = async (): Promise<void> => {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      await SocialLogin.logout({
+        provider: 'google',
+      });
+    }
+  } catch (error) {
+    console.warn('Native Google logout warning:', error);
+  }
+
+  await signOut(auth);
+  cachedAccessToken = null;
+  tokenExpiryTime = 0;
+};
