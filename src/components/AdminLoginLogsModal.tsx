@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { UserLoginRecord, UserAccessProfile, AccessSettings, ADMIN_EMAIL } from '../types';
+import {
+  UserLoginRecord,
+  UserAccessProfile,
+  AccessSettings,
+  ADMIN_EMAIL,
+  SUPER_ADMIN_EMAIL,
+  UserRole,
+} from '../types';
 import { Translations } from '../i18n/translations';
 import {
   exportLoginRecordsCSV,
@@ -19,7 +26,14 @@ import {
   registerNewClientManually,
   syncProfilesToDrive,
   fetchProfilesFromDrive,
+  changeUserRole,
+  getRoleBadgeClass,
+  getRoleLabel,
 } from '../services/userAccessManager';
+import {
+  fetchServerUsers,
+  markRegistrationsAsReadOnServer,
+} from '../services/superAdminApi';
 import {
   Shield,
   X,
@@ -42,6 +56,10 @@ import {
   Check,
   RefreshCw,
   Cloud,
+  Crown,
+  ChevronDown,
+  Bell,
+  Filter,
 } from 'lucide-react';
 import { CloudServerManagerTab } from './CloudServerManagerTab';
 import { CloudSyncSummary } from '../services/cloudServer';
@@ -101,9 +119,14 @@ export function AdminLoginLogsModal({
   const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientName, setNewClientName] = useState('');
+  const [newClientRole, setNewClientRole] = useState<UserRole>('client');
   const [newClientDays, setNewClientDays] = useState(7);
   const [newClientNotes, setNewClientNotes] = useState('');
   const [isDriveSyncingUsers, setIsDriveSyncingUsers] = useState(false);
+
+  // Role filtering & updating state
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [isUpdatingRoleId, setIsUpdatingRoleId] = useState<string | null>(null);
 
   const refreshData = () => {
     setUserProfiles(getAllUserProfiles());
@@ -111,6 +134,13 @@ export function AdminLoginLogsModal({
     setSettings(currentSettings);
     setDefaultDaysInput(currentSettings.defaultAllowedDays);
     setNewClientDays(currentSettings.defaultAllowedDays);
+
+    // Also fetch fresh users from central server
+    fetchServerUsers().then((res) => {
+      if (res && res.users && res.users.length > 0) {
+        setUserProfiles(res.users);
+      }
+    }).catch(() => {});
   };
 
   useEffect(() => {
@@ -145,17 +175,46 @@ export function AdminLoginLogsModal({
       newClientEmail,
       newClientName,
       newClientDays,
-      newClientNotes
+      newClientNotes,
+      newClientRole
     );
     if (driveAccessToken) {
       syncProfilesToDrive(driveAccessToken).catch(() => {});
     }
-    showToast(`${profile.email} - ${t.clientRegisteredSuccess}`);
+    showToast(`${profile.email} - ${t.clientRegisteredSuccess} (${newClientRole})`);
     setNewClientEmail('');
     setNewClientName('');
     setNewClientNotes('');
+    setNewClientRole('client');
     setShowRegisterForm(false);
     refreshData();
+  };
+
+  const handleRoleChange = async (userId: string, newRole: UserRole, displayName: string) => {
+    setIsUpdatingRoleId(userId);
+    try {
+      const updated = await changeUserRole(userId, newRole);
+      if (updated) {
+        setUserProfiles((prev) =>
+          prev.map((u) => (u.userId === userId ? updated : u))
+        );
+        showToast(`${displayName} - ${t.roleUpdatedSuccess} (${newRole})`);
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update role');
+    } finally {
+      setIsUpdatingRoleId(null);
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markRegistrationsAsReadOnServer();
+      setUserProfiles((prev) =>
+        prev.map((u) => ({ ...u, unreadBySuperAdmin: false }))
+      );
+      showToast('All new registrations marked as seen');
+    } catch {}
   };
 
   const handleDriveSyncUsers = async () => {
@@ -185,11 +244,21 @@ export function AdminLoginLogsModal({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Filtered Users
-  const filteredUsers = userProfiles.filter(
-    (u) =>
+  // Filtered Users with Search Term and Role Filter
+  const filteredUsers = userProfiles.filter((u) => {
+    const matchesSearch =
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.displayName.toLowerCase().includes(searchTerm.toLowerCase())
+      u.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.role && u.role.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesRole =
+      roleFilter === 'all' || (u.role || 'client') === roleFilter;
+
+    return matchesSearch && matchesRole;
+  });
+
+  const unreadRegistrations = userProfiles.filter(
+    (u) => u.unreadBySuperAdmin && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()
   );
 
   // Filtered Login Logs
@@ -291,22 +360,25 @@ export function AdminLoginLogsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
         {/* MODAL HEADER */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/90">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
-              <Shield className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shadow-md font-black shrink-0">
+              <Crown className="w-5 h-5 text-amber-950 fill-amber-300" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold text-slate-900">
-                  {t.adminPanel}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-black text-white flex items-center gap-1.5">
+                  <span>{t.superAdminTitle}</span>
                 </h2>
-                <span className="text-[11px] font-mono bg-indigo-100 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold border border-indigo-200">
-                  {ADMIN_EMAIL}
+                <span className="text-[11px] font-mono bg-amber-400 text-slate-950 px-2.5 py-0.5 rounded-full font-black border border-amber-300 shadow-2xs flex items-center gap-1">
+                  👑 {SUPER_ADMIN_EMAIL}
+                </span>
+                <span className="text-[10px] font-bold bg-indigo-500/40 text-indigo-200 px-2 py-0.5 rounded-md border border-indigo-400/30">
+                  {t.accountsUnderSuperAdmin}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
-                {t.adminOnlyNotice}
+              <p className="text-xs text-slate-300 mt-0.5">
+                Super Admin යටතේ register වන සියලුම ගිණුම් කළමනාකරණය සහ භූමිකාව (Role) වෙනස් කිරීම.
               </p>
             </div>
           </div>
@@ -315,15 +387,15 @@ export function AdminLoginLogsModal({
             <button
               type="button"
               onClick={refreshData}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
-              title="Refresh Data"
+              className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+              title="Refresh Data from Server"
             >
               <RefreshCw className="w-4 h-4" />
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+              className="p-1.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -447,6 +519,35 @@ export function AdminLoginLogsModal({
         {/* TAB 1: USER ACCESS & ALLOWED DAYS CONTROL */}
         {activeTab === 'users' && (
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            {/* UNREAD NEW CLIENT REGISTRATION ALERT BANNER */}
+            {unreadRegistrations.length > 0 && (
+              <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-xs shrink-0 animate-pulse">
+                    <Bell className="w-5 h-5 fill-amber-100" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-amber-950 flex items-center gap-2 flex-wrap">
+                      <span>{t.newClientAlertTitle} ({unreadRegistrations.length})</span>
+                      <span className="text-[10px] bg-rose-500 text-white px-2 py-0.2 rounded-full font-bold uppercase tracking-wider">
+                        New
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-900 mt-0.5">
+                      {unreadRegistrations.map((u) => u.displayName || u.email).join(', ')} - ඔබගේ Super Admin ගිණුම යටතේ ලියාපදිංචි වී ඇත.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+                >
+                  Mark All Seen
+                </button>
+              </div>
+            )}
+
             {/* DEFAULT ALLOWED DAYS CONFIGURATION BOX */}
             <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -551,7 +652,7 @@ export function AdminLoginLogsModal({
                   className="bg-white border border-emerald-300 rounded-xl p-3.5 space-y-3 shadow-xs animate-in fade-in duration-150"
                 >
                   <div className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5 flex items-center justify-between">
-                    <span>{t.registerNewClient} (Pre-approve Client Access)</span>
+                    <span>{t.registerNewClient} (Pre-approve Client Access under Super Admin)</span>
                     <button
                       type="button"
                       onClick={() => setShowRegisterForm(false)}
@@ -590,7 +691,24 @@ export function AdminLoginLogsModal({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Assigned Role (භූමිකාව)
+                      </label>
+                      <select
+                        value={newClientRole}
+                        onChange={(e) => setNewClientRole(e.target.value as UserRole)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-bold"
+                      >
+                        <option value="client">👤 Client (සේවාලාභියා)</option>
+                        <option value="editor">✍️ Editor (සකසන්නා)</option>
+                        <option value="manager">💼 Manager (කළමනාකරු)</option>
+                        <option value="admin">🛡️ Admin (පරිපාලක)</option>
+                        <option value="viewer">👁️ Viewer (නරඹන්නා)</option>
+                      </select>
+                    </div>
+
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
                         Trial Access Period
@@ -619,7 +737,7 @@ export function AdminLoginLogsModal({
                       </label>
                       <input
                         type="text"
-                        placeholder="e.g. New retail client"
+                        placeholder="e.g. Retail client"
                         value={newClientNotes}
                         onChange={(e) => setNewClientNotes(e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
@@ -646,10 +764,44 @@ export function AdminLoginLogsModal({
               )}
             </div>
 
+            {/* ROLE FILTER QUICK SELECTOR BUTTONS */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+              <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1 mr-1 shrink-0">
+                <Filter className="w-3.5 h-3.5" /> Filter Role:
+              </span>
+              {[
+                { id: 'all', label: 'All', count: userProfiles.length },
+                { id: 'super_admin', label: '👑 Super Admin', count: userProfiles.filter((u) => u.role === 'super_admin' || u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()).length },
+                { id: 'admin', label: '🛡️ Admin', count: userProfiles.filter((u) => u.role === 'admin').length },
+                { id: 'manager', label: '💼 Manager', count: userProfiles.filter((u) => u.role === 'manager').length },
+                { id: 'editor', label: '✍️ Editor', count: userProfiles.filter((u) => u.role === 'editor').length },
+                { id: 'client', label: '👤 Client', count: userProfiles.filter((u) => (!u.role || u.role === 'client') && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()).length },
+                { id: 'viewer', label: '👁️ Viewer', count: userProfiles.filter((u) => u.role === 'viewer').length },
+              ].map((rf) => (
+                <button
+                  key={rf.id}
+                  type="button"
+                  onClick={() => setRoleFilter(rf.id)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                    roleFilter === rf.id
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>{rf.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    roleFilter === rf.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {rf.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
             {/* USERS TABLE */}
             {filteredUsers.length === 0 ? (
               <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
-                No registered users found yet. When a user signs in via Google, they will appear here with {settings.defaultAllowedDays} days access.
+                No registered users found matching the criteria. All registered users under Super Admin ({SUPER_ADMIN_EMAIL}) will appear here.
               </div>
             ) : (
               <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs bg-white">
@@ -658,6 +810,7 @@ export function AdminLoginLogsModal({
                     <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                       <tr>
                         <th className="px-4 py-3">User / Email</th>
+                        <th className="px-3 py-3">Role / භූමිකාව</th>
                         <th className="px-3 py-3">Registered Date</th>
                         <th className="px-3 py-3">Allowed Days</th>
                         <th className="px-3 py-3">Status / Days Remaining</th>
@@ -692,9 +845,13 @@ export function AdminLoginLogsModal({
                                 <div className="min-w-0">
                                   <div className="font-bold text-slate-900 flex items-center gap-1.5">
                                     <span className="truncate max-w-[160px] sm:max-w-xs">{user.displayName}</span>
-                                    {isAdminUser && (
-                                      <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded-md border border-amber-200">
-                                        Admin
+                                    {isAdminUser ? (
+                                      <span className="text-[10px] bg-amber-100 text-amber-900 font-black px-1.5 py-0.2 rounded-md border border-amber-300 flex items-center gap-0.5">
+                                        <Crown className="w-3 h-3 fill-amber-400" /> Super Admin
+                                      </span>
+                                    ) : (
+                                      <span className={`text-[10px] px-1.5 py-0.2 rounded-md border ${getRoleBadgeClass(user.role || 'client')}`}>
+                                        {user.role || 'client'}
                                       </span>
                                     )}
                                   </div>
@@ -703,6 +860,42 @@ export function AdminLoginLogsModal({
                                   </div>
                                 </div>
                               </div>
+                            </td>
+
+                            {/* ROLE COLUMN WITH INTERACTIVE ROLE SELECTOR */}
+                            <td className="px-3 py-3">
+                              {isAdminUser ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                                  <Crown className="w-3.5 h-3.5 fill-amber-400 text-amber-900" />
+                                  <span>Super Admin</span>
+                                </span>
+                              ) : (
+                                <div className="relative inline-block">
+                                  <select
+                                    value={user.role || 'client'}
+                                    disabled={isUpdatingRoleId === user.userId}
+                                    onChange={(e) =>
+                                      handleRoleChange(
+                                        user.userId,
+                                        e.target.value as UserRole,
+                                        user.displayName
+                                      )
+                                    }
+                                    className={`text-xs font-bold px-2.5 py-1 rounded-lg border appearance-none pr-6 cursor-pointer transition-all shadow-2xs focus:ring-2 focus:ring-indigo-400 ${getRoleBadgeClass(
+                                      user.role || 'client'
+                                    )} ${isUpdatingRoleId === user.userId ? 'opacity-50 pointer-events-none' : ''}`}
+                                    title={t.changeRole}
+                                  >
+                                    <option value="client">👤 Client (සේවාලාභියා)</option>
+                                    <option value="editor">✍️ Editor (සකසන්නා)</option>
+                                    <option value="manager">💼 Manager (කළමනාකරු)</option>
+                                    <option value="admin">🛡️ Admin (පරිපාලක)</option>
+                                    <option value="viewer">👁️ Viewer (නරඹන්නා)</option>
+                                    <option value="super_admin">👑 Super Admin</option>
+                                  </select>
+                                  <ChevronDown className="w-3.5 h-3.5 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                                </div>
+                              )}
                             </td>
 
                             {/* REGISTRATION */}

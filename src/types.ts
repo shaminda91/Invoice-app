@@ -89,13 +89,34 @@ export interface Invoice {
   updatedAt: number;
 }
 
+export const SUPER_ADMIN_EMAIL = 'psgss91@gmail.com';
 export const ADMIN_EMAIL = 'psgss91@gmail.com';
+
+export type UserRole =
+  | 'super_admin'
+  | 'admin'
+  | 'manager'
+  | 'editor'
+  | 'client'
+  | 'viewer';
+
+export interface UserPermissions {
+  canCreateInvoice: boolean;
+  canEditInvoice: boolean;
+  canDeleteInvoice: boolean;
+  canExportPDF: boolean;
+  canManageClients: boolean;
+  canViewReports: boolean;
+  canManageUsers: boolean;
+}
 
 export interface UserAccessProfile {
   userId: string;
   email: string;
   displayName: string;
   photoURL?: string;
+  role: UserRole;
+  parentAdminEmail: string; // Always 'psgss91@gmail.com' for registered accounts under Super Admin
   firstLoginTime: number; // timestamp
   firstLoginString: string;
   allowedDays: number; // e.g. 7 days by default
@@ -105,6 +126,11 @@ export interface UserAccessProfile {
   lastLoginTime: number;
   lastLoginString: string;
   notes?: string;
+  unreadBySuperAdmin?: boolean; // Set to true when new client registers so Super Admin sees the alert
+  deviceInfo?: string;
+  browser?: string;
+  os?: string;
+  permissions?: UserPermissions;
 }
 
 export interface AccessSettings {

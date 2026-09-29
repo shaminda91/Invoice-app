@@ -1,11 +1,25 @@
 import { User } from 'firebase/auth';
-import { UserAccessProfile, AccessSettings, ADMIN_EMAIL } from '../types';
+import {
+  UserAccessProfile,
+  AccessSettings,
+  ADMIN_EMAIL,
+  SUPER_ADMIN_EMAIL,
+  UserRole,
+  UserPermissions,
+} from '../types';
 import {
   uploadMultipartFile,
   getOrCreateInvoiceFolder,
   findFileInFolder,
   downloadDriveFileContent,
 } from './googleDrive';
+import {
+  registerUserOnServer,
+  updateUserRoleOnServer,
+  updateUserAccessOnServer,
+  deleteUserOnServer,
+  fetchServerUsers,
+} from './superAdminApi';
 
 const STORAGE_KEY_SETTINGS = 'ps_invoice_access_settings';
 const STORAGE_KEY_PROFILES = 'ps_invoice_user_profiles';
@@ -14,6 +28,141 @@ const DEFAULT_SETTINGS: AccessSettings = {
   defaultAllowedDays: 7, // Admin specified default: 7 days
   autoNotifyAdminOnExpiry: true,
 };
+
+/**
+ * Default permission matrix by role
+ */
+export function getDefaultPermissions(role: UserRole): UserPermissions {
+  switch (role) {
+    case 'super_admin':
+      return {
+        canCreateInvoice: true,
+        canEditInvoice: true,
+        canDeleteInvoice: true,
+        canExportPDF: true,
+        canManageClients: true,
+        canViewReports: true,
+        canManageUsers: true,
+      };
+    case 'admin':
+      return {
+        canCreateInvoice: true,
+        canEditInvoice: true,
+        canDeleteInvoice: true,
+        canExportPDF: true,
+        canManageClients: true,
+        canViewReports: true,
+        canManageUsers: false,
+      };
+    case 'manager':
+      return {
+        canCreateInvoice: true,
+        canEditInvoice: true,
+        canDeleteInvoice: true,
+        canExportPDF: true,
+        canManageClients: true,
+        canViewReports: true,
+        canManageUsers: false,
+      };
+    case 'editor':
+      return {
+        canCreateInvoice: true,
+        canEditInvoice: true,
+        canDeleteInvoice: false,
+        canExportPDF: true,
+        canManageClients: true,
+        canViewReports: false,
+        canManageUsers: false,
+      };
+    case 'client':
+      return {
+        canCreateInvoice: true,
+        canEditInvoice: true,
+        canDeleteInvoice: false,
+        canExportPDF: true,
+        canManageClients: false,
+        canViewReports: false,
+        canManageUsers: false,
+      };
+    case 'viewer':
+    default:
+      return {
+        canCreateInvoice: false,
+        canEditInvoice: false,
+        canDeleteInvoice: false,
+        canExportPDF: true,
+        canManageClients: false,
+        canViewReports: false,
+        canManageUsers: false,
+      };
+  }
+}
+
+/**
+ * Role badge styling
+ */
+export function getRoleBadgeClass(role: UserRole): string {
+  switch (role) {
+    case 'super_admin':
+      return 'bg-amber-100 text-amber-900 border-amber-300 font-black';
+    case 'admin':
+      return 'bg-indigo-100 text-indigo-800 border-indigo-300 font-bold';
+    case 'manager':
+      return 'bg-purple-100 text-purple-800 border-purple-300 font-bold';
+    case 'editor':
+      return 'bg-blue-100 text-blue-800 border-blue-300 font-bold';
+    case 'client':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-300 font-medium';
+    case 'viewer':
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-300 font-medium';
+  }
+}
+
+/**
+ * Role label details
+ */
+export function getRoleLabel(role: UserRole, lang: string = 'si'): { name: string; icon: string; desc: string } {
+  switch (role) {
+    case 'super_admin':
+      return {
+        name: 'Super Admin',
+        icon: '👑',
+        desc: lang === 'si' ? 'ප්‍රධාන පරිපාලක (සම්පූර්ණ පාලනය)' : 'Root Super Administrator',
+      };
+    case 'admin':
+      return {
+        name: lang === 'si' ? 'පරිපාලක (Admin)' : lang === 'ta' ? 'நிர்வாகி (Admin)' : 'Admin',
+        icon: '🛡️',
+        desc: lang === 'si' ? 'පද්ධති පරිපාලක' : 'System Administrator',
+      };
+    case 'manager':
+      return {
+        name: lang === 'si' ? 'කළමනාකරු (Manager)' : lang === 'ta' ? 'மேலாளர் (Manager)' : 'Manager',
+        icon: '💼',
+        desc: lang === 'si' ? 'ඉන්වොයිස් සහ ගනුදෙනුකරු කළමනාකරු' : 'Invoices & Clients Manager',
+      };
+    case 'editor':
+      return {
+        name: lang === 'si' ? 'සකසන්නා (Editor)' : lang === 'ta' ? 'தொகுப்பாளர் (Editor)' : 'Editor',
+        icon: '✍️',
+        desc: lang === 'si' ? 'ඉන්වොයිස් සකසන්නා' : 'Invoice Creator & Editor',
+      };
+    case 'client':
+      return {
+        name: lang === 'si' ? 'සේවාලාභියා (Client)' : lang === 'ta' ? 'வாடிக்கையாளர் (Client)' : 'Client',
+        icon: '👤',
+        desc: lang === 'si' ? 'සේවාලාභියා' : 'Standard Client Account',
+      };
+    case 'viewer':
+    default:
+      return {
+        name: lang === 'si' ? 'නරඹන්නා (Viewer)' : lang === 'ta' ? 'பார்வையாளர் (Viewer)' : 'Viewer',
+        icon: '👁️',
+        desc: lang === 'si' ? 'බැලීම සහ බාගත කිරීම පමණි' : 'View & Download Only',
+      };
+  }
+}
 
 /**
  * Get current system access settings
@@ -78,8 +227,8 @@ function formatDate(ts: number): string {
 
 /**
  * Register or update a user on login.
- * Admin (psgss91@gmail.com) always gets status 'unlimited'.
- * New users receive defaultAllowedDays (e.g. 7 days).
+ * Super Admin (psgss91@gmail.com) always gets role 'super_admin' and status 'unlimited'.
+ * New users receive role 'client' under Super Admin, with defaultAllowedDays (e.g. 7 days).
  */
 export function registerOrUpdateUserAccess(
   user: User,
@@ -89,7 +238,7 @@ export function registerOrUpdateUserAccess(
   const settings = getAccessSettings();
   const now = Date.now();
   const userEmail = (user.email || '').trim().toLowerCase();
-  const isAdmin = userEmail === ADMIN_EMAIL.toLowerCase();
+  const isSuperAdmin = userEmail === SUPER_ADMIN_EMAIL.toLowerCase();
 
   const existingIndex = profiles.findIndex(
     (p) => p.userId === user.uid || p.email.toLowerCase() === userEmail
@@ -100,7 +249,9 @@ export function registerOrUpdateUserAccess(
   if (existingIndex >= 0) {
     // Existing user login
     const existing = profiles[existingIndex];
+    const role: UserRole = isSuperAdmin ? 'super_admin' : (existing.role || 'client');
     const isExpired =
+      role !== 'super_admin' &&
       existing.status !== 'unlimited' &&
       existing.status !== 'blocked' &&
       now > existing.expiresAt;
@@ -110,21 +261,25 @@ export function registerOrUpdateUserAccess(
       email: user.email || existing.email,
       displayName: user.displayName || existing.displayName,
       photoURL: user.photoURL || existing.photoURL,
+      role,
+      parentAdminEmail: SUPER_ADMIN_EMAIL,
       lastLoginTime: now,
       lastLoginString: new Date(now).toLocaleString(),
-      status: isAdmin
+      status: isSuperAdmin
         ? 'unlimited'
         : isExpired
         ? 'expired'
         : existing.status,
+      permissions: existing.permissions || getDefaultPermissions(role),
     };
 
     profiles[existingIndex] = profile;
   } else {
-    // New user first-time registration!
-    const allowedDays = isAdmin ? 9999 : settings.defaultAllowedDays;
-    const expiresAt = isAdmin
-      ? now + 36500 * 86400000 // 100 years for admin
+    // New user first-time registration under Super Admin!
+    const role: UserRole = isSuperAdmin ? 'super_admin' : 'client';
+    const allowedDays = isSuperAdmin ? 99999 : settings.defaultAllowedDays;
+    const expiresAt = isSuperAdmin
+      ? now + 36500 * 86400000 // 100 years for super admin
       : now + allowedDays * 86400000;
 
     profile = {
@@ -132,21 +287,36 @@ export function registerOrUpdateUserAccess(
       email: user.email || 'No Email',
       displayName: user.displayName || 'Google User',
       photoURL: user.photoURL || undefined,
+      role,
+      parentAdminEmail: SUPER_ADMIN_EMAIL,
       firstLoginTime: now,
       firstLoginString: formatDate(now),
       allowedDays,
       expiresAt,
       expiresAtString: formatDate(expiresAt),
-      status: isAdmin ? 'unlimited' : 'active',
+      status: isSuperAdmin ? 'unlimited' : 'active',
       lastLoginTime: now,
       lastLoginString: new Date(now).toLocaleString(),
-      notes: isAdmin ? 'System Administrator & Owner' : `New user (${allowedDays} days trial)`,
+      notes: isSuperAdmin
+        ? 'Root Super Administrator & System Owner'
+        : `Registered under Super Admin (${allowedDays} days trial)`,
+      unreadBySuperAdmin: !isSuperAdmin,
+      permissions: getDefaultPermissions(role),
     };
 
-    profiles.unshift(profile);
+    if (isSuperAdmin) {
+      profiles.unshift(profile);
+    } else {
+      profiles.push(profile);
+    }
   }
 
   persistProfiles(profiles);
+
+  // Asynchronously register on central server
+  registerUserOnServer(user).catch((err) => {
+    console.warn('Failed to sync registration to central server:', err);
+  });
 
   // Sync to Google Drive if admin token is available
   if (driveAccessToken) {
@@ -159,12 +329,48 @@ export function registerOrUpdateUserAccess(
 }
 
 /**
+ * Super Admin action: change any registered user's role
+ */
+export async function changeUserRole(userId: string, newRole: UserRole): Promise<UserAccessProfile | null> {
+  const profiles = getAllUserProfiles();
+  const index = profiles.findIndex((p) => p.userId === userId);
+  if (index === -1) return null;
+
+  const user = profiles[index];
+  if (user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() && newRole !== 'super_admin') {
+    throw new Error('Super Admin role cannot be demoted');
+  }
+
+  const updated: UserAccessProfile = {
+    ...user,
+    role: newRole,
+    permissions: getDefaultPermissions(newRole),
+    notes: `${user.notes || ''} [Role changed to ${newRole} on ${new Date().toLocaleDateString()}]`.trim(),
+  };
+
+  profiles[index] = updated;
+  persistProfiles(profiles);
+
+  // Sync to central server
+  try {
+    await updateUserRoleOnServer(userId, newRole);
+  } catch (err) {
+    console.warn('Failed to sync role change to server:', err);
+  }
+
+  return updated;
+}
+
+/**
  * Check if the user is allowed to access the system.
- * Returns detailed access info: { isAllowed, isAdmin, daysRemaining, isExpired, isBlocked }
+ * Returns detailed access info: { isAllowed, isAdmin, isSuperAdmin, role, permissions, daysRemaining, isExpired, isBlocked, profile }
  */
 export function checkUserAccessStatus(user: { uid: string; email: string | null } | null): {
   isAllowed: boolean;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  role: UserRole;
+  permissions: UserPermissions;
   daysRemaining: number;
   isExpired: boolean;
   isBlocked: boolean;
@@ -174,6 +380,9 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
     return {
       isAllowed: false,
       isAdmin: false,
+      isSuperAdmin: false,
+      role: 'client',
+      permissions: getDefaultPermissions('client'),
       daysRemaining: 0,
       isExpired: false,
       isBlocked: false,
@@ -182,14 +391,17 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
   }
 
   const userEmail = (user.email || '').trim().toLowerCase();
-  const isAdmin = userEmail === ADMIN_EMAIL.toLowerCase();
+  const isSuperAdmin = userEmail === SUPER_ADMIN_EMAIL.toLowerCase();
 
-  // psgss91@gmail.com is always Admin with unlimited access
-  if (isAdmin) {
+  // psgss91@gmail.com is always Super Admin with permanent unlimited access
+  if (isSuperAdmin) {
     return {
       isAllowed: true,
       isAdmin: true,
-      daysRemaining: 9999,
+      isSuperAdmin: true,
+      role: 'super_admin',
+      permissions: getDefaultPermissions('super_admin'),
+      daysRemaining: 99999,
       isExpired: false,
       isBlocked: false,
       profile: null,
@@ -202,11 +414,14 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
   );
 
   if (!profile) {
-    // If user profile not found yet, grant default trial days
+    // If user profile not found yet, grant default trial days as client
     const settings = getAccessSettings();
     return {
       isAllowed: true,
       isAdmin: false,
+      isSuperAdmin: false,
+      role: 'client',
+      permissions: getDefaultPermissions('client'),
       daysRemaining: settings.defaultAllowedDays,
       isExpired: false,
       isBlocked: false,
@@ -214,12 +429,19 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
     };
   }
 
-  // Admin granted unlimited access
-  if (profile.status === 'unlimited') {
+  const userRole: UserRole = profile.role || 'client';
+  const permissions: UserPermissions = profile.permissions || getDefaultPermissions(userRole);
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+
+  // Super Admin granted unlimited access
+  if (profile.status === 'unlimited' || userRole === 'super_admin') {
     return {
       isAllowed: true,
-      isAdmin: false,
-      daysRemaining: 9999,
+      isAdmin,
+      isSuperAdmin: userRole === 'super_admin',
+      role: userRole,
+      permissions,
+      daysRemaining: 99999,
       isExpired: false,
       isBlocked: false,
       profile,
@@ -230,7 +452,10 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
   if (profile.status === 'blocked') {
     return {
       isAllowed: false,
-      isAdmin: false,
+      isAdmin,
+      isSuperAdmin: false,
+      role: userRole,
+      permissions,
       daysRemaining: 0,
       isExpired: false,
       isBlocked: true,
@@ -249,7 +474,10 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
     }
     return {
       isAllowed: false,
-      isAdmin: false,
+      isAdmin,
+      isSuperAdmin: false,
+      role: userRole,
+      permissions,
       daysRemaining: 0,
       isExpired: true,
       isBlocked: false,
@@ -261,7 +489,10 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
 
   return {
     isAllowed: true,
-    isAdmin: false,
+    isAdmin,
+    isSuperAdmin: false,
+    role: userRole,
+    permissions,
     daysRemaining,
     isExpired: false,
     isBlocked: false,
@@ -353,6 +584,9 @@ export function extendUserAccessDays(userId: string, additionalDays: number): Us
 
   profiles[index] = updated;
   persistProfiles(profiles);
+
+  updateUserAccessOnServer(userId, { allowedDays: newAllowedDays, status: 'active', notes: updated.notes }).catch(() => {});
+
   return updated;
 }
 
@@ -379,6 +613,9 @@ export function setUserExactAllowedDays(userId: string, totalDays: number): User
 
   profiles[index] = updated;
   persistProfiles(profiles);
+
+  updateUserAccessOnServer(userId, { allowedDays: totalDays, status: updated.status }).catch(() => {});
+
   return updated;
 }
 
@@ -398,6 +635,9 @@ export function toggleUserUnlimited(userId: string, isUnlimited: boolean): UserA
 
   profiles[index] = updated;
   persistProfiles(profiles);
+
+  updateUserAccessOnServer(userId, { status: updated.status }).catch(() => {});
+
   return updated;
 }
 
@@ -417,6 +657,9 @@ export function toggleUserBlocked(userId: string, isBlocked: boolean): UserAcces
 
   profiles[index] = updated;
   persistProfiles(profiles);
+
+  updateUserAccessOnServer(userId, { status: updated.status }).catch(() => {});
+
   return updated;
 }
 
@@ -426,6 +669,7 @@ export function toggleUserBlocked(userId: string, isBlocked: boolean): UserAcces
 export function deleteUserProfile(userId: string): void {
   const profiles = getAllUserProfiles().filter((p) => p.userId !== userId);
   persistProfiles(profiles);
+  deleteUserOnServer(userId).catch(() => {});
 }
 
 /**
@@ -462,7 +706,8 @@ export function registerNewClientManually(
   email: string,
   name: string,
   allowedDays: number = 7,
-  notes?: string
+  notes?: string,
+  initialRole: UserRole = 'client'
 ): UserAccessProfile {
   const profiles = getAllUserProfiles();
   const cleanEmail = email.trim().toLowerCase();
@@ -476,6 +721,8 @@ export function registerNewClientManually(
     userId: existingIndex >= 0 ? profiles[existingIndex].userId : 'client_' + now + '_' + Math.random().toString(36).substring(2, 7),
     email: cleanEmail,
     displayName: name.trim() || cleanEmail.split('@')[0],
+    role: initialRole,
+    parentAdminEmail: SUPER_ADMIN_EMAIL,
     allowedDays,
     expiresAt,
     expiresAtString: formatDate(expiresAt),
@@ -483,8 +730,10 @@ export function registerNewClientManually(
     firstLoginTime: existingIndex >= 0 ? profiles[existingIndex].firstLoginTime : now,
     firstLoginString: existingIndex >= 0 ? profiles[existingIndex].firstLoginString : formatDate(now),
     lastLoginTime: now,
-    lastLoginString: 'Registered by Admin',
-    notes: notes || `Registered by Admin (${isUnlimited ? 'Unlimited' : allowedDays + ' days'})`,
+    lastLoginString: 'Registered by Super Admin',
+    notes: notes || `Registered by Super Admin (${isUnlimited ? 'Unlimited' : allowedDays + ' days'})`,
+    unreadBySuperAdmin: false,
+    permissions: getDefaultPermissions(initialRole),
   };
 
   if (existingIndex >= 0) {
@@ -494,6 +743,18 @@ export function registerNewClientManually(
   }
 
   persistProfiles(profiles);
+
+  // Sync to central server
+  registerUserOnServer({
+    uid: profile.userId,
+    email: profile.email,
+    displayName: profile.displayName,
+  }).then(() => {
+    if (initialRole !== 'client') {
+      updateUserRoleOnServer(profile.userId, initialRole).catch(() => {});
+    }
+  }).catch(() => {});
+
   return profile;
 }
 

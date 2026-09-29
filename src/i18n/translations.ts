@@ -404,6 +404,21 @@ export interface Translations {
   registeredClientsCount: string;
   refreshFromDrive: string;
   clientRegisteredSuccess: string;
+  superAdminTitle: string;
+  superAdminBadge: string;
+  userRole: string;
+  changeRole: string;
+  roleUpdatedSuccess: string;
+  accountsUnderSuperAdmin: string;
+  newClientAlertTitle: string;
+  newClientAlertDesc: string;
+  manageAllAccounts: string;
+  roleSuperAdmin: string;
+  roleAdmin: string;
+  roleManager: string;
+  roleEditor: string;
+  roleClient: string;
+  roleViewer: string;
 
   // Responsive & Auto-Fit
   autoFit: string;
@@ -820,6 +835,21 @@ export const translations: Record<AppLanguage, Translations> = {
     registeredClientsCount: 'Registered Clients',
     refreshFromDrive: 'Sync from Google Drive',
     clientRegisteredSuccess: 'Client registered successfully with trial access',
+    superAdminTitle: 'Super Admin Control Center',
+    superAdminBadge: 'Super Admin (psgss91@gmail.com)',
+    userRole: 'Role',
+    changeRole: 'Change Role',
+    roleUpdatedSuccess: 'User role updated successfully',
+    accountsUnderSuperAdmin: 'Accounts Registered under Super Admin',
+    newClientAlertTitle: 'New Client Registered',
+    newClientAlertDesc: 'A new client has registered under your Super Admin account.',
+    manageAllAccounts: 'Manage Accounts',
+    roleSuperAdmin: 'Super Admin (Root)',
+    roleAdmin: 'Administrator',
+    roleManager: 'Manager',
+    roleEditor: 'Editor',
+    roleClient: 'Client',
+    roleViewer: 'Viewer',
 
     // Responsive & Auto-Fit
     autoFit: 'Auto Fit',
@@ -1235,6 +1265,21 @@ export const translations: Record<AppLanguage, Translations> = {
     registeredClientsCount: 'ලියාපදිංචි සේවාලාභීන්',
     refreshFromDrive: 'Google Drive වෙතින් ලබාගන්න',
     clientRegisteredSuccess: 'නව සේවාලාභියා සාර්ථකව ලියාපදිංචි කරන ලදී',
+    superAdminTitle: 'Super Admin පාලන මධ්‍යස්ථානය',
+    superAdminBadge: 'Super Admin (psgss91@gmail.com)',
+    userRole: 'භූමිකාව (Role)',
+    changeRole: 'භූමිකාව වෙනස් කරන්න',
+    roleUpdatedSuccess: 'පරිශීලක භූමිකාව සාර්ථකව වෙනස් කරන ලදී',
+    accountsUnderSuperAdmin: 'Super Admin යටතේ ලියාපදිංචි සියලු ගිණුම්',
+    newClientAlertTitle: 'නව සේවාලාභියෙක් ලියාපදිංචි විය',
+    newClientAlertDesc: 'ඔබගේ Super Admin ගිණුම යටතේ නව සේවාලාභියෙකු ලියාපදිංචි වී ඇත.',
+    manageAllAccounts: 'ගිණුම් කළමනාකරණය',
+    roleSuperAdmin: 'Super Admin (ප්‍රධාන පරිපාලක)',
+    roleAdmin: 'Admin (පරිපාලක)',
+    roleManager: 'Manager (කළමනාකරු)',
+    roleEditor: 'Editor (සකසන්නා)',
+    roleClient: 'Client (සේවාලාභියා)',
+    roleViewer: 'Viewer (නරඹන්නා)',
 
     // Responsive & Auto-Fit
     autoFit: 'ස්වයංක්‍රීය ගැළපීම',
@@ -1650,6 +1695,21 @@ export const translations: Record<AppLanguage, Translations> = {
     registeredClientsCount: 'பதிவுசெய்த வாடிக்கையாளர்கள்',
     refreshFromDrive: 'Google Drive இலிருந்து புதுப்பிக்கவும்',
     clientRegisteredSuccess: 'வாடிக்கையாளர் வெற்றிகரமாக பதிவு செய்யப்பட்டார்',
+    superAdminTitle: 'Super Admin கட்டுப்பாட்டு மையம்',
+    superAdminBadge: 'Super Admin (psgss91@gmail.com)',
+    userRole: 'பங்கு (Role)',
+    changeRole: 'பங்கை மாற்றவும்',
+    roleUpdatedSuccess: 'பயனர் பங்கு வெற்றிகரமாக மாற்றப்பட்டது',
+    accountsUnderSuperAdmin: 'Super Admin இன் கீழ் பதிவுசெய்யப்பட்ட கணக்குகள்',
+    newClientAlertTitle: 'புதிய வாடிக்கையாளர் பதிவுசெய்துள்ளார்',
+    newClientAlertDesc: 'உங்கள் Super Admin கணக்கின் கீழ் புதிய வாடிக்கையாளர் ஒருவர் பதிவுசெய்துள்ளார்.',
+    manageAllAccounts: 'கணக்குகளை நிர்வகிக்கவும்',
+    roleSuperAdmin: 'Super Admin (முதன்மை நிர்வாகி)',
+    roleAdmin: 'Admin (நிர்வாகி)',
+    roleManager: 'Manager (மேலாளர்)',
+    roleEditor: 'Editor (தொகுப்பாளர்)',
+    roleClient: 'Client (வாடிக்கையாளர்)',
+    roleViewer: 'Viewer (பார்வையாளர்)',
 
     // Responsive & Auto-Fit
     autoFit: 'தானியங்கி அளவிடுதல்',

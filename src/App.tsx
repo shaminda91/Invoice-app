@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Invoice, SavedCompany, SavedClient, UserLoginRecord, ADMIN_EMAIL } from './types';
+import {
+  Invoice,
+  SavedCompany,
+  SavedClient,
+  UserLoginRecord,
+  ADMIN_EMAIL,
+  SUPER_ADMIN_EMAIL,
+  UserRole,
+  UserPermissions,
+} from './types';
 import { createDefaultInvoice, BLANK_INVOICE } from './data/defaultInvoice';
 import { InvoiceEditor } from './components/InvoiceEditor';
 import { InvoicePreview } from './components/InvoicePreview';
@@ -18,6 +27,7 @@ import {
   saveAccessSettings,
   fetchProfilesFromDrive,
 } from './services/userAccessManager';
+import { fetchServerUsers } from './services/superAdminApi';
 import {
   recordUserLogin,
   getLoginRecords,
@@ -68,6 +78,8 @@ import {
   Maximize2,
   Smartphone,
   Columns,
+  Crown,
+  Bell,
 } from 'lucide-react';
 import { MobileActionDrawer } from './components/MobileActionDrawer';
 
@@ -255,14 +267,19 @@ export default function App() {
           console.error('Failed to record user login:', e);
         }
 
-        // If admin logs in, auto-fetch registered client profiles and login audit records from Google Drive
-        if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() && token) {
-          fetchProfilesFromDrive(token).then(() => {
+        // If super admin logs in, auto-fetch registered client profiles from server and Google Drive
+        if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+          fetchServerUsers().then(() => {
             setAccessRefreshCounter((c) => c + 1);
           }).catch(() => {});
-          fetchLoginRecordsFromDrive(token).then((driveLogs) => {
-            if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
-          }).catch(() => {});
+          if (token) {
+            fetchProfilesFromDrive(token).then(() => {
+              setAccessRefreshCounter((c) => c + 1);
+            }).catch(() => {});
+            fetchLoginRecordsFromDrive(token).then((driveLogs) => {
+              if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
+            }).catch(() => {});
+          }
         }
       },
       () => {
@@ -387,24 +404,27 @@ export default function App() {
         console.warn('Could not record login:', logErr);
       }
 
-      // If admin logs in, auto-fetch from Google Drive
-      if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() && accessToken) {
+      // If Super Admin logs in, auto-fetch from server & Google Drive
+      if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
         try {
-          await fetchProfilesFromDrive(accessToken);
-          const driveLogs = await fetchLoginRecordsFromDrive(accessToken);
-          if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
+          await fetchServerUsers();
+          if (accessToken) {
+            await fetchProfilesFromDrive(accessToken);
+            const driveLogs = await fetchLoginRecordsFromDrive(accessToken);
+            if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
+          }
           setAccessRefreshCounter((c) => c + 1);
         } catch {}
       }
 
-      if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-        const clientCount = getAllUserProfiles().filter((p) => p.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()).length;
+      if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+        const clientCount = getAllUserProfiles().filter((p) => p.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()).length;
         const adminMsg =
           language === 'si'
-            ? `👑 සාදරයෙන් පිළිගනිමු පරිපාලක (psgss91@gmail.com)! ලියාපදිංචි සේවාලාභීන් ${clientCount} ක් ඇත.`
+            ? `👑 සාදරයෙන් පිළිගනිමු Super Admin (${SUPER_ADMIN_EMAIL})! ඔබ යටතේ ලියාපදිංචි ගිණුම් ${clientCount} ක් ඇත.`
             : language === 'ta'
-            ? `👑 நல்வரவு நிர்வாகி (psgss91@gmail.com)! ${clientCount} பதிவுசெய்த வாடிக்கையாளர்கள்.`
-            : `👑 Welcome Administrator (psgss91@gmail.com)! ${clientCount} registered clients.`;
+            ? `👑 நல்வரவு Super Admin (${SUPER_ADMIN_EMAIL})! ${clientCount} பதிவுசெய்த கணக்குகள்.`
+            : `👑 Welcome Super Admin (${SUPER_ADMIN_EMAIL})! ${clientCount} registered accounts under you.`;
         showToast(adminMsg);
       } else {
         showToast(`${t.loginSuccess} (${user.displayName || user.email})`);
@@ -1286,8 +1306,25 @@ export default function App() {
             {/* USER PROFILE & ADMIN SECTION (DESKTOP) */}
             {googleUser ? (
               <div className="hidden lg:flex items-center gap-1.5 pl-2 border-l border-slate-200">
-                {/* ADMIN CONTROL PANEL BUTTON (Shown exclusively for psgss91@gmail.com) */}
-                {accessCheck.isAdmin && (
+                {/* ADMIN / SUPER ADMIN CONTROL PANEL BUTTON */}
+                {accessCheck.isSuperAdmin ? (
+                  <button
+                    type="button"
+                    id="btn-admin-control-panel"
+                    onClick={() => {
+                      setAdminModalTab('users');
+                      setIsAdminLogsModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 border border-amber-400 rounded-lg transition-all cursor-pointer shadow-xs"
+                    title={t.superAdminTitle}
+                  >
+                    <Crown className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
+                    <span>Super Admin</span>
+                    <span className="bg-slate-950 text-amber-300 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                      {registeredClients.length}
+                    </span>
+                  </button>
+                ) : accessCheck.isAdmin ? (
                   <button
                     type="button"
                     id="btn-admin-control-panel"
@@ -1304,7 +1341,7 @@ export default function App() {
                       {registeredClients.length} Clients
                     </span>
                   </button>
-                )}
+                ) : null}
 
                 {/* TRIAL / ACCESS DAYS REMAINING BADGE (For non-admin users) */}
                 {!accessCheck.isAdmin && (
