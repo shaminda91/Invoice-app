@@ -1,6 +1,11 @@
 import { User } from 'firebase/auth';
 import { UserAccessProfile, AccessSettings, ADMIN_EMAIL } from '../types';
-import { uploadMultipartFile, getOrCreateInvoiceFolder } from './googleDrive';
+import {
+  uploadMultipartFile,
+  getOrCreateInvoiceFolder,
+  findFileInFolder,
+  downloadDriveFileContent,
+} from './googleDrive';
 
 const STORAGE_KEY_SETTINGS = 'ps_invoice_access_settings';
 const STORAGE_KEY_PROFILES = 'ps_invoice_user_profiles';
@@ -451,20 +456,63 @@ export function createRenewalMailtoLink(profile?: UserAccessProfile | null, user
 }
 
 /**
+ * Admin action: Manually register a new client
+ */
+export function registerNewClientManually(
+  email: string,
+  name: string,
+  allowedDays: number = 7,
+  notes?: string
+): UserAccessProfile {
+  const profiles = getAllUserProfiles();
+  const cleanEmail = email.trim().toLowerCase();
+  const now = Date.now();
+  const expiresAt = allowedDays >= 9999 ? now + 36500 * 86400000 : now + allowedDays * 86400000;
+  const isUnlimited = allowedDays >= 9999;
+
+  const existingIndex = profiles.findIndex((p) => p.email.toLowerCase() === cleanEmail);
+
+  const profile: UserAccessProfile = {
+    userId: existingIndex >= 0 ? profiles[existingIndex].userId : 'client_' + now + '_' + Math.random().toString(36).substring(2, 7),
+    email: cleanEmail,
+    displayName: name.trim() || cleanEmail.split('@')[0],
+    allowedDays,
+    expiresAt,
+    expiresAtString: formatDate(expiresAt),
+    status: isUnlimited ? 'unlimited' : 'active',
+    firstLoginTime: existingIndex >= 0 ? profiles[existingIndex].firstLoginTime : now,
+    firstLoginString: existingIndex >= 0 ? profiles[existingIndex].firstLoginString : formatDate(now),
+    lastLoginTime: now,
+    lastLoginString: 'Registered by Admin',
+    notes: notes || `Registered by Admin (${isUnlimited ? 'Unlimited' : allowedDays + ' days'})`,
+  };
+
+  if (existingIndex >= 0) {
+    profiles[existingIndex] = profile;
+  } else {
+    profiles.unshift(profile);
+  }
+
+  persistProfiles(profiles);
+  return profile;
+}
+
+/**
  * Sync user access profiles to Google Drive
  */
-async function syncProfilesToDrive(
+export async function syncProfilesToDrive(
   accessToken: string,
-  profiles: UserAccessProfile[]
+  profiles?: UserAccessProfile[]
 ): Promise<void> {
+  const list = profiles || getAllUserProfiles();
   try {
     const folder = await getOrCreateInvoiceFolder(accessToken);
     const data = {
       app: 'PSN Invoice',
       admin: ADMIN_EMAIL,
       lastUpdated: new Date().toISOString(),
-      userCount: profiles.length,
-      users: profiles,
+      userCount: list.length,
+      users: list,
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: 'application/json',
@@ -479,4 +527,38 @@ async function syncProfilesToDrive(
   } catch (err) {
     console.warn('Error syncing profiles to Drive:', err);
   }
+}
+
+/**
+ * Fetch and merge user profiles from Google Drive
+ */
+export async function fetchProfilesFromDrive(
+  accessToken: string
+): Promise<UserAccessProfile[]> {
+  try {
+    const folder = await getOrCreateInvoiceFolder(accessToken);
+    const file = await findFileInFolder(accessToken, folder.id, 'PS_Invoice_User_Access_Profiles.json');
+    if (file) {
+      const content = await downloadDriveFileContent(accessToken, file.id);
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed.users) && parsed.users.length > 0) {
+        const current = getAllUserProfiles();
+        const mergedMap = new Map<string, UserAccessProfile>();
+        current.forEach((p) => mergedMap.set(p.userId || p.email.toLowerCase(), p));
+        parsed.users.forEach((p: UserAccessProfile) => {
+          const key = p.userId || p.email.toLowerCase();
+          const existing = mergedMap.get(key);
+          if (!existing || p.lastLoginTime > (existing.lastLoginTime || 0)) {
+            mergedMap.set(key, p);
+          }
+        });
+        const mergedList = Array.from(mergedMap.values());
+        persistProfiles(mergedList);
+        return mergedList;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch profiles from Drive:', err);
+  }
+  return getAllUserProfiles();
 }

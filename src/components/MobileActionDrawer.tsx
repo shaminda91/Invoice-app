@@ -63,6 +63,7 @@ interface MobileActionDrawerProps {
   savedInvoicesCount: number;
   savedCompaniesCount: number;
   savedClientsCount: number;
+  registeredClientsCount?: number;
 }
 
 export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
@@ -95,6 +96,7 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
   savedInvoicesCount,
   savedCompaniesCount,
   savedClientsCount,
+  registeredClientsCount = 0,
 }) => {
   if (!isOpen) return null;
 
@@ -466,9 +468,14 @@ export const MobileActionDrawer: React.FC<MobileActionDrawerProps> = ({
                     <Shield className="w-4 h-4" />
                     <span>{t.adminPanel}</span>
                   </div>
-                  <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-mono">
-                    psgss91
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="bg-emerald-400 text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                      {registeredClientsCount} Clients
+                    </span>
+                    <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-mono">
+                      Admin
+                    </span>
+                  </div>
                 </button>
               </div>
             )}

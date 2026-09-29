@@ -5,6 +5,7 @@ import {
   exportLoginRecordsCSV,
   createMailtoReportForAdmin,
   clearLoginRecords,
+  fetchLoginRecordsFromDrive,
 } from '../services/loginTracker';
 import {
   getAccessSettings,
@@ -15,6 +16,9 @@ import {
   toggleUserUnlimited,
   toggleUserBlocked,
   deleteUserProfile,
+  registerNewClientManually,
+  syncProfilesToDrive,
+  fetchProfilesFromDrive,
 } from '../services/userAccessManager';
 import {
   Shield,
@@ -93,11 +97,20 @@ export function AdminLoginLogsModal({
   const [customDaysInput, setCustomDaysInput] = useState<number>(7);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // New Client Registration Form state
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientDays, setNewClientDays] = useState(7);
+  const [newClientNotes, setNewClientNotes] = useState('');
+  const [isDriveSyncingUsers, setIsDriveSyncingUsers] = useState(false);
+
   const refreshData = () => {
     setUserProfiles(getAllUserProfiles());
     const currentSettings = getAccessSettings();
     setSettings(currentSettings);
     setDefaultDaysInput(currentSettings.defaultAllowedDays);
+    setNewClientDays(currentSettings.defaultAllowedDays);
   };
 
   useEffect(() => {
@@ -106,8 +119,64 @@ export function AdminLoginLogsModal({
       if (initialTab) {
         setActiveTab(initialTab);
       }
+      // Auto-fetch from Drive if token is available
+      if (driveAccessToken) {
+        fetchProfilesFromDrive(driveAccessToken).then((profiles) => {
+          if (profiles && profiles.length > 0) {
+            setUserProfiles(profiles);
+          }
+        }).catch(() => {});
+        fetchLoginRecordsFromDrive(driveAccessToken).then((logs) => {
+          if (logs && logs.length > 0) {
+            onRecordsUpdated(logs);
+          }
+        }).catch(() => {});
+      }
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, driveAccessToken]);
+
+  const handleRegisterClientSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClientEmail.trim()) {
+      showToast('Please enter client email address');
+      return;
+    }
+    const profile = registerNewClientManually(
+      newClientEmail,
+      newClientName,
+      newClientDays,
+      newClientNotes
+    );
+    if (driveAccessToken) {
+      syncProfilesToDrive(driveAccessToken).catch(() => {});
+    }
+    showToast(`${profile.email} - ${t.clientRegisteredSuccess}`);
+    setNewClientEmail('');
+    setNewClientName('');
+    setNewClientNotes('');
+    setShowRegisterForm(false);
+    refreshData();
+  };
+
+  const handleDriveSyncUsers = async () => {
+    if (!driveAccessToken) {
+      showToast(t.driveNotConnected);
+      if (onConnectGoogle) onConnectGoogle();
+      return;
+    }
+    setIsDriveSyncingUsers(true);
+    try {
+      const fetchedProfiles = await fetchProfilesFromDrive(driveAccessToken);
+      const fetchedLogs = await fetchLoginRecordsFromDrive(driveAccessToken);
+      setUserProfiles(fetchedProfiles);
+      onRecordsUpdated(fetchedLogs);
+      showToast('Profiles and login records synchronized with Google Drive');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to sync with Google Drive');
+    } finally {
+      setIsDriveSyncingUsers(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -432,6 +501,149 @@ export function AdminLoginLogsModal({
                   <span>{t.saveDefaultDays}</span>
                 </button>
               </div>
+            </div>
+
+            {/* CLIENT REGISTRATION STATUS & POLICY MESSAGE BOX (සේවාලාභී ලියාපදිංචි පණිවිඩය) */}
+            <div className="bg-gradient-to-r from-emerald-50/90 to-teal-50/90 border border-emerald-200 rounded-xl p-4 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <UserCheck className="w-4 h-4 text-emerald-700" />
+                    <h4 className="text-xs font-bold text-emerald-950">
+                      {t.clientRegisterMessage}
+                    </h4>
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full">
+                      {userProfiles.filter((u) => u.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()).length} {t.registeredClientsCount}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800/90 leading-relaxed">
+                    {t.clientRegistrationNotice}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterForm((prev) => !prev)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{t.registerNewClient}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDriveSyncUsers}
+                    disabled={isDriveSyncingUsers}
+                    className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    title={t.refreshFromDrive}
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isDriveSyncingUsers ? 'animate-spin text-emerald-600' : ''}`} />
+                    <span className="hidden sm:inline">{t.refreshFromDrive}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* QUICK CLIENT REGISTRATION FORM (COLLAPSIBLE) */}
+              {showRegisterForm && (
+                <form
+                  onSubmit={handleRegisterClientSubmit}
+                  className="bg-white border border-emerald-300 rounded-xl p-3.5 space-y-3 shadow-xs animate-in fade-in duration-150"
+                >
+                  <div className="text-xs font-bold text-slate-800 border-b border-slate-100 pb-1.5 flex items-center justify-between">
+                    <span>{t.registerNewClient} (Pre-approve Client Access)</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowRegisterForm(false)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Client Email *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="client@gmail.com"
+                        value={newClientEmail}
+                        onChange={(e) => setNewClientEmail(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Client Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Kasun Perera"
+                        value={newClientName}
+                        onChange={(e) => setNewClientName(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Trial Access Period
+                      </label>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {[7, 14, 30, 90, 9999].map((days) => (
+                          <button
+                            key={days}
+                            type="button"
+                            onClick={() => setNewClientDays(days)}
+                            className={`px-2 py-1 text-[11px] font-bold rounded-md transition-colors cursor-pointer ${
+                              newClientDays === days
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            }`}
+                          >
+                            {days >= 9999 ? 'Unlimited' : `${days}d`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Notes / Client Info
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. New retail client"
+                        value={newClientNotes}
+                        onChange={(e) => setNewClientNotes(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setShowRegisterForm(false)}
+                      className="px-3 py-1.5 text-xs text-slate-600 hover:text-slate-900 font-semibold cursor-pointer"
+                    >
+                      {t.cancel}
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+                    >
+                      {t.registerNewClient}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
 
             {/* USERS TABLE */}

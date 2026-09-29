@@ -398,6 +398,12 @@ export interface Translations {
   userDaysUpdatedSuccess: string;
   settingsSavedSuccess: string;
   adminOnlyNotice: string;
+  clientRegisterMessage: string;
+  registerNewClient: string;
+  clientRegistrationNotice: string;
+  registeredClientsCount: string;
+  refreshFromDrive: string;
+  clientRegisteredSuccess: string;
 
   // Responsive & Auto-Fit
   autoFit: string;
@@ -808,6 +814,12 @@ export const translations: Record<AppLanguage, Translations> = {
     userDaysUpdatedSuccess: 'User access period updated successfully',
     settingsSavedSuccess: 'Default access settings saved successfully',
     adminOnlyNotice: 'Only psgss91@gmail.com has Administrator access privileges.',
+    clientRegisterMessage: 'Client Registration Status & Policy',
+    registerNewClient: '+ Register Client',
+    clientRegistrationNotice: 'New clients automatically receive 7 days free trial access upon first login.',
+    registeredClientsCount: 'Registered Clients',
+    refreshFromDrive: 'Sync from Google Drive',
+    clientRegisteredSuccess: 'Client registered successfully with trial access',
 
     // Responsive & Auto-Fit
     autoFit: 'Auto Fit',
@@ -1217,6 +1229,12 @@ export const translations: Record<AppLanguage, Translations> = {
     userDaysUpdatedSuccess: 'පරිශීලක ප්‍රවේශ දින සාර්ථකව යාවත්කාලීන කරන ලදී',
     settingsSavedSuccess: 'පෙරනිමි ප්‍රවේශ සැකසුම් සුරකින ලදී',
     adminOnlyNotice: 'පරිපාලක වරප්‍රසාද හිමිවන්නේ psgss91@gmail.com ගිණුමට පමණි.',
+    clientRegisterMessage: 'සේවාලාභී ලියාපදිංචි පණිවිඩය සහ ප්‍රතිපත්තිය',
+    registerNewClient: '+ නව Client ලියාපදිංචි කරන්න',
+    clientRegistrationNotice: 'අලුතින් ලියාපදිංචි වන සියලුම සේවාලාභීන්ට පෙරනිමියෙන් දින 7 ක නොමිලේ අත්හදා බැලීමේ කාලයක් ලැබේ.',
+    registeredClientsCount: 'ලියාපදිංචි සේවාලාභීන්',
+    refreshFromDrive: 'Google Drive වෙතින් ලබාගන්න',
+    clientRegisteredSuccess: 'නව සේවාලාභියා සාර්ථකව ලියාපදිංචි කරන ලදී',
 
     // Responsive & Auto-Fit
     autoFit: 'ස්වයංක්‍රීය ගැළපීම',
@@ -1626,6 +1644,12 @@ export const translations: Record<AppLanguage, Translations> = {
     userDaysUpdatedSuccess: 'பயனர் அணுகல் காலம் வெற்றிகரமாக புதுப்பிக்கப்பட்டது',
     settingsSavedSuccess: 'இயல்புநிலை அணுகல் அமைப்புகள் சேமிக்கப்பட்டன',
     adminOnlyNotice: 'நிர்வாகி அணுகல் உரிமைகள் psgss91@gmail.com இற்கு மட்டுமே உண்டு.',
+    clientRegisterMessage: 'வாடிக்கையாளர் பதிவு நிலை மற்றும் கொள்கை',
+    registerNewClient: '+ புதிய வாடிக்கையாளரை பதிவு செய்க',
+    clientRegistrationNotice: 'புதிய வாடிக்கையாளர்களுக்கு முதல் உள்நுழைவில் 7 நாட்கள் இலவச சோதனை காலம் வழங்கப்படும்.',
+    registeredClientsCount: 'பதிவுசெய்த வாடிக்கையாளர்கள்',
+    refreshFromDrive: 'Google Drive இலிருந்து புதுப்பிக்கவும்',
+    clientRegisteredSuccess: 'வாடிக்கையாளர் வெற்றிகரமாக பதிவு செய்யப்பட்டார்',
 
     // Responsive & Auto-Fit
     autoFit: 'தானியங்கி அளவிடுதல்',

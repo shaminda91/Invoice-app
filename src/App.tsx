@@ -16,8 +16,13 @@ import {
   getAllUserProfiles,
   getAccessSettings,
   saveAccessSettings,
+  fetchProfilesFromDrive,
 } from './services/userAccessManager';
-import { recordUserLogin, getLoginRecords } from './services/loginTracker';
+import {
+  recordUserLogin,
+  getLoginRecords,
+  fetchLoginRecordsFromDrive,
+} from './services/loginTracker';
 import { calculateInvoiceTotals, formatCurrency, generateInvoiceNumber } from './utils/calculations';
 import { exportInvoiceToExcel, exportInvoiceToPDF } from './utils/exportUtils';
 import { AppLanguage, translations } from './i18n/translations';
@@ -249,6 +254,16 @@ export default function App() {
         } catch (e) {
           console.error('Failed to record user login:', e);
         }
+
+        // If admin logs in, auto-fetch registered client profiles and login audit records from Google Drive
+        if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() && token) {
+          fetchProfilesFromDrive(token).then(() => {
+            setAccessRefreshCounter((c) => c + 1);
+          }).catch(() => {});
+          fetchLoginRecordsFromDrive(token).then((driveLogs) => {
+            if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
+          }).catch(() => {});
+        }
       },
       () => {
         setGoogleUser(null);
@@ -372,7 +387,28 @@ export default function App() {
         console.warn('Could not record login:', logErr);
       }
 
-      showToast(`${t.loginSuccess} (${user.displayName || user.email})`);
+      // If admin logs in, auto-fetch from Google Drive
+      if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase() && accessToken) {
+        try {
+          await fetchProfilesFromDrive(accessToken);
+          const driveLogs = await fetchLoginRecordsFromDrive(accessToken);
+          if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
+          setAccessRefreshCounter((c) => c + 1);
+        } catch {}
+      }
+
+      if (user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        const clientCount = getAllUserProfiles().filter((p) => p.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase()).length;
+        const adminMsg =
+          language === 'si'
+            ? `👑 සාදරයෙන් පිළිගනිමු පරිපාලක (psgss91@gmail.com)! ලියාපදිංචි සේවාලාභීන් ${clientCount} ක් ඇත.`
+            : language === 'ta'
+            ? `👑 நல்வரவு நிர்வாகி (psgss91@gmail.com)! ${clientCount} பதிவுசெய்த வாடிக்கையாளர்கள்.`
+            : `👑 Welcome Administrator (psgss91@gmail.com)! ${clientCount} registered clients.`;
+        showToast(adminMsg);
+      } else {
+        showToast(`${t.loginSuccess} (${user.displayName || user.email})`);
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       setLoginError(err?.message || 'Google sign-in was cancelled or failed.');
@@ -897,6 +933,23 @@ export default function App() {
     };
   }, [googleUser, isGuestMode, accessRefreshCounter]);
 
+  // Registered clients stats for Admin notification message
+  const registeredClients = React.useMemo(() => {
+    return getAllUserProfiles().filter((p) => p.email.toLowerCase() !== ADMIN_EMAIL.toLowerCase());
+  }, [accessRefreshCounter, googleUser]);
+
+  const activeClientsCount = React.useMemo(() => {
+    return registeredClients.filter((p) => p.status === 'active' || p.status === 'unlimited').length;
+  }, [registeredClients]);
+
+  const expiredClientsCount = React.useMemo(() => {
+    return registeredClients.filter((p) => p.status === 'expired').length;
+  }, [registeredClients]);
+
+  const defaultAccessDays = React.useMemo(() => {
+    return getAccessSettings().defaultAllowedDays;
+  }, [accessRefreshCounter]);
+
   // 0. LOGIN SCREEN GUARD: Show LoginPage if not logged in and not in guest mode
   if (!googleUser && !isGuestMode) {
     return (
@@ -1247,8 +1300,8 @@ export default function App() {
                   >
                     <Shield className="w-3.5 h-3.5 text-indigo-600" />
                     <span className="hidden md:inline">{t.adminPanel}</span>
-                    <span className="bg-indigo-200 text-indigo-900 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
-                      Admin
+                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold px-1.5 py-0.2 rounded-full">
+                      {registeredClients.length} Clients
                     </span>
                   </button>
                 )}
@@ -1327,6 +1380,70 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* 1.1 ADMIN CLIENT REGISTRATION MESSAGE & STATUS BANNER (Exclusively for psgss91@gmail.com) */}
+      {accessCheck.isAdmin && (
+        <div className="no-print bg-slate-900 text-white border-b border-indigo-950 px-3 sm:px-6 py-2.5 text-xs shadow-xs">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 bg-amber-400 text-slate-950 font-black px-2 py-0.5 rounded text-[10px] uppercase tracking-wide">
+                <Shield className="w-3 h-3 text-slate-950" />
+                {t.adminBadge}
+              </span>
+              <span className="font-semibold text-slate-100 text-[11px] sm:text-xs">
+                {language === 'si'
+                  ? `සේවාලාභී ලියාපදිංචි පණිවිඩය (Client Register Status): ලියාපදිංචි සේවාලාභීන් ${registeredClients.length} ක් ඇත (සක්‍රීය: ${activeClientsCount}, අවසන් වූ: ${expiredClientsCount}). නව පරිශීලකයින්ට දින ${defaultAccessDays} ක අත්හදා බැලීමක් ලැබේ.`
+                  : language === 'ta'
+                  ? `வாடிக்கையாளர் பதிவு நிலை: ${registeredClients.length} வாடிக்கையாளர்கள் பதிவு செய்துள்ளனர் (${activeClientsCount} செயலில், ${expiredClientsCount} காலாவதியானது). புதிய பயனர்களுக்கு ${defaultAccessDays} நாட்கள் சோதனை வழங்கப்படும்.`
+                  : `Client Registration Status: ${registeredClients.length} Registered Clients (${activeClientsCount} Active, ${expiredClientsCount} Expired). New users receive ${defaultAccessDays} days trial.`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                id="btn-admin-manage-clients-banner"
+                onClick={() => {
+                  setAdminModalTab('users');
+                  setIsAdminLogsModalOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold text-[11px] transition-colors cursor-pointer shadow-xs"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>
+                  {language === 'si'
+                    ? 'සේවාලාභී ලියාපදිංචි තොරතුරු / කළමනාකරණය'
+                    : language === 'ta'
+                    ? 'பதிவுசெய்த வாடிக்கையாளர்கள்'
+                    : 'Manage Registered Clients'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 1.2 CLIENT TRIAL ACTIVE REGISTRATION BANNER (For non-admin logged-in clients) */}
+      {googleUser && !accessCheck.isAdmin && (
+        <div className="no-print bg-emerald-500/10 border-b border-emerald-500/20 px-3 sm:px-6 py-2 text-xs text-emerald-950">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="font-bold bg-emerald-200 text-emerald-950 px-2 py-0.5 rounded text-[10px] uppercase">
+                {language === 'si' ? 'ලියාපදිංචි සේවාලාභී ගිණුම' : language === 'ta' ? 'பதிவுசெய்த கணக்கு' : 'Registered Client'}
+              </span>
+              <span className="font-medium text-[11px] sm:text-xs">
+                {language === 'si'
+                  ? `ඔබගේ දින ${accessCheck.profile?.allowedDays || 7} ක නොමිලේ අත්හදා බැලීමේ කාලය සක්‍රියයි (අවසන් වන දිනය: ${accessCheck.profile?.expiresAtString || 'දින කිහිපයකින්'}).`
+                  : language === 'ta'
+                  ? `உங்கள் ${accessCheck.profile?.allowedDays || 7} நாட்கள் இலவச சோதனைக் காலம் செயலில் உள்ளது (காலாவதி: ${accessCheck.profile?.expiresAtString || ''}).`
+                  : `Your ${accessCheck.profile?.allowedDays || 7}-day trial access is active (Expires: ${accessCheck.profile?.expiresAtString || ''}).`}
+              </span>
+            </div>
+            <div className="text-[11px] font-bold text-emerald-800 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+              {accessCheck.daysRemaining} {language === 'si' ? 'දින ඉතිරියි' : language === 'ta' ? 'நாட்கள் மீதம்' : 'days left'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* GUEST MODE ALERT BANNER */}
       {isGuestMode && !googleUser && (
@@ -1872,6 +1989,7 @@ export default function App() {
         savedInvoicesCount={savedInvoices.length}
         savedCompaniesCount={savedCompanies.length}
         savedClientsCount={savedClients.length}
+        registeredClientsCount={registeredClients.length}
       />
 
       {/* GOOGLE DRIVE SYNC MODAL */}

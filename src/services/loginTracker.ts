@@ -1,6 +1,11 @@
 import { User } from 'firebase/auth';
 import { UserLoginRecord, ADMIN_EMAIL } from '../types';
-import { uploadMultipartFile, getOrCreateInvoiceFolder } from './googleDrive';
+import {
+  uploadMultipartFile,
+  getOrCreateInvoiceFolder,
+  findFileInFolder,
+  downloadDriveFileContent,
+} from './googleDrive';
 
 const STORAGE_KEY_LOGINS = 'ps_invoice_user_logins';
 
@@ -205,4 +210,34 @@ export function exportLoginRecordsCSV(records?: UserLoginRecord[]): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+/**
+ * Fetch and merge login audit logs from Google Drive
+ */
+export async function fetchLoginRecordsFromDrive(
+  accessToken: string
+): Promise<UserLoginRecord[]> {
+  try {
+    const folder = await getOrCreateInvoiceFolder(accessToken);
+    const file = await findFileInFolder(accessToken, folder.id, 'PSN_Invoice_User_Logins_psgss91.json');
+    if (file) {
+      const content = await downloadDriveFileContent(accessToken, file.id);
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed.logins) && parsed.logins.length > 0) {
+        const current = getLoginRecords();
+        const map = new Map<string, UserLoginRecord>();
+        current.forEach((r) => map.set(r.id || `${r.userId}_${r.loginTime}`, r));
+        parsed.logins.forEach((r: UserLoginRecord) => {
+          map.set(r.id || `${r.userId}_${r.loginTime}`, r);
+        });
+        const merged = Array.from(map.values()).sort((a, b) => b.loginTime - a.loginTime);
+        persistRecords(merged);
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch login records from Drive:', err);
+  }
+  return getLoginRecords();
 }
