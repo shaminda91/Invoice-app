@@ -457,7 +457,7 @@ export default function App() {
     try {
       const snapshot: FullAppDataSnapshot = {
         metadata: {
-          app: 'PS Quick Invoice',
+          app: 'PSN Invoice',
           version: CURRENT_APP_VERSION,
           exportedAt: Date.now(),
           exportedAtString: new Date().toISOString(),
@@ -905,7 +905,7 @@ export default function App() {
     return (
       <AccessExpiredScreen
         userEmail={googleUser?.email || (isGuestMode ? 'Guest Session' : 'No Email')}
-        userName={googleUser?.displayName || (isGuestMode ? 'Guest Trial User' : 'PS Quick Invoice User')}
+        userName={googleUser?.displayName || (isGuestMode ? 'Guest Trial User' : 'PSN Invoice User')}
         profile={accessCheck.profile}
         onSignOut={async () => {
           if (googleUser) {
@@ -951,12 +951,11 @@ export default function App() {
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
               <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div className="flex flex-col leading-none shrink-0">
-              <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight flex items-center gap-1">
-                <span>PS</span>
-                <span className="text-indigo-600 font-extrabold text-[11px] sm:text-xs">Quick</span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                PSN
               </span>
-              <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight">
+              <span className="text-base sm:text-lg font-black text-indigo-600 tracking-tight">
                 Invoice
               </span>
             </div>

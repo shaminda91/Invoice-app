@@ -109,7 +109,7 @@ export async function recordUserLogin(
     try {
       const folder = await getOrCreateInvoiceFolder(driveAccessToken);
       const auditLogData = {
-        app: 'PS Invoice',
+        app: 'PSN Invoice',
         admin: ADMIN_EMAIL,
         lastUpdated: new Date().toISOString(),
         totalLoginsRecorded: updatedRecords.length,
@@ -123,7 +123,7 @@ export async function recordUserLogin(
       await uploadMultipartFile(
         driveAccessToken,
         folder.id,
-        `PS_Invoice_User_Logins_psgss91.json`,
+        `PSN_Invoice_User_Logins_psgss91.json`,
         'application/json',
         auditBlob
       );
@@ -155,9 +155,9 @@ export function clearLoginRecords(): void {
  */
 export function createMailtoReportForAdmin(records?: UserLoginRecord[]): string {
   const list = records || getLoginRecords();
-  const subject = encodeURIComponent(`[PS Invoice] User Login Activity Report (${list.length} Logins)`);
+  const subject = encodeURIComponent(`[PSN Invoice] User Login Activity Report (${list.length} Logins)`);
 
-  let bodyText = `PS INVOICE USER LOGIN AUDIT REPORT\n`;
+  let bodyText = `PSN INVOICE USER LOGIN AUDIT REPORT\n`;
   bodyText += `Recipient / Admin: ${ADMIN_EMAIL}\n`;
   bodyText += `Generated: ${new Date().toLocaleString()}\n`;
   bodyText += `Total Logins Recorded: ${list.length}\n`;
@@ -172,7 +172,7 @@ export function createMailtoReportForAdmin(records?: UserLoginRecord[]): string 
   });
 
   bodyText += `--------------------------------------------------\n`;
-  bodyText += `This report was automatically compiled by PS Invoice System.`;
+  bodyText += `This report was automatically compiled by PSN Invoice System.`;
 
   return `mailto:${ADMIN_EMAIL}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
 }

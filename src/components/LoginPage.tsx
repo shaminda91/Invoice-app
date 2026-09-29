@@ -49,7 +49,7 @@ export function LoginPage({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-base font-bold text-white tracking-tight flex items-center gap-1.5">
-                <span>PS Quick</span>
+                <span>PSN</span>
                 <span className="text-indigo-400">Invoice</span>
               </span>
               <span className="text-[10px] font-semibold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">
@@ -166,7 +166,7 @@ export function LoginPage({
               <Receipt className="w-7 h-7" />
             </div>
             <h2 className="text-xl font-bold text-white">
-              {language === 'si' ? 'ගිණුමට පිවිසෙන්න' : 'Sign in to PS Quick Invoice'}
+              {language === 'si' ? 'ගිණුමට පිවිසෙන්න' : 'Sign in to PSN Invoice'}
             </h2>
             <p className="text-xs text-slate-400 mt-1">
               {language === 'si'
@@ -289,7 +289,7 @@ export function LoginPage({
       {/* FOOTER */}
       <footer className="relative z-10 max-w-6xl mx-auto w-full px-4 py-4 text-center text-xs text-slate-500 border-t border-slate-800/80">
         <p>
-          PS Quick Invoice © 2026 • Ps ebay solution • Pramesh Shaminda (Malabe, Sri Lanka)
+          PSN Invoice © 2026 • Ps ebay solution • Pramesh Shaminda (Malabe, Sri Lanka)
         </p>
       </footer>
     </div>

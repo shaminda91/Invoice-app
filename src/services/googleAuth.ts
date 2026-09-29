@@ -92,7 +92,8 @@ export const signInWithGoogleDrive = async (): Promise<{
         },
       });
 
-      const idToken = login.result?.idToken;
+      const loginResult = login.result as any;
+      const idToken = loginResult?.idToken;
 
       if (!idToken) {
         throw new Error('Google ID token was not returned');
@@ -101,7 +102,7 @@ export const signInWithGoogleDrive = async (): Promise<{
       const credential = GoogleAuthProvider.credential(idToken);
       const firebaseResult = await signInWithCredential(auth, credential);
 
-      const accessToken = login.result?.accessToken?.token;
+      const accessToken = loginResult?.accessToken?.token;
 
       if (!accessToken) {
         throw new Error('Google Drive access token was not returned');

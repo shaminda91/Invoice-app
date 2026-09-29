@@ -177,7 +177,7 @@ export function GoogleDriveSyncModal({
 
               <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400 pt-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Google Drive File Scope: Only accesses files created by PS Invoice</span>
+                <span>Google Drive File Scope: Only accesses files created by PSN Invoice</span>
               </div>
             </div>
           ) : (
@@ -322,7 +322,7 @@ export function GoogleDriveSyncModal({
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>Folder: PS Invoice - Backup</span>
+            <span>Folder: PSN Invoice - Backup</span>
           </div>
           <button
             type="button"

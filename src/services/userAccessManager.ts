@@ -428,15 +428,15 @@ export function deleteUserProfile(userId: string): void {
  */
 export function createRenewalMailtoLink(profile?: UserAccessProfile | null, userEmail?: string): string {
   const email = profile?.email || userEmail || 'Registered User';
-  const name = profile?.displayName || 'PS Invoice User';
+  const name = profile?.displayName || 'PSN Invoice User';
   const registered = profile?.firstLoginString || 'Recent';
   const expired = profile?.expiresAtString || 'Today';
 
-  const subject = encodeURIComponent(`[PS Invoice] Access Renewal / Update Request - ${email}`);
+  const subject = encodeURIComponent(`[PSN Invoice] Access Renewal / Update Request - ${email}`);
 
   const body =
     `Hello Administrator (${ADMIN_EMAIL}),\n\n` +
-    `My trial access period for PS Invoice has expired.\n` +
+    `My trial access period for PSN Invoice has expired.\n` +
     `Please renew or update my access so I can continue generating and exporting invoices.\n\n` +
     `--- USER DETAILS ---\n` +
     `Name: ${name}\n` +
@@ -460,7 +460,7 @@ async function syncProfilesToDrive(
   try {
     const folder = await getOrCreateInvoiceFolder(accessToken);
     const data = {
-      app: 'PS Invoice',
+      app: 'PSN Invoice',
       admin: ADMIN_EMAIL,
       lastUpdated: new Date().toISOString(),
       userCount: profiles.length,

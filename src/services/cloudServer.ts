@@ -2,7 +2,7 @@ import { Invoice, SavedClient, SavedCompany, UserLoginRecord, UserAccessProfile,
 import { AppLanguage } from '../i18n/translations';
 import { uploadMultipartFile, findFileInFolder, downloadDriveFileContent } from './googleDrive';
 
-export const MASTER_CLOUD_FOLDER_NAME = 'PS Invoice - Cloud Server (psgss91@gmail.com)';
+export const MASTER_CLOUD_FOLDER_NAME = 'PSN Invoice - Cloud Server (psgss91@gmail.com)';
 export const MASTER_DB_FILENAME = 'ps_invoice_cloud_master_database.json';
 export const APP_MANIFEST_FILENAME = 'ps_invoice_app_manifest.json';
 export const CURRENT_APP_VERSION = '2.2.0';
@@ -95,7 +95,7 @@ export async function getOrCreateCloudServerFolder(
     body: JSON.stringify({
       name: MASTER_CLOUD_FOLDER_NAME,
       mimeType: 'application/vnd.google-apps.folder',
-      description: 'PS Invoice Master Cloud Storage Server & Central Database for psgss91@gmail.com',
+      description: 'PSN Invoice Master Cloud Storage Server & Central Database for psgss91@gmail.com',
     }),
   });
 
@@ -141,7 +141,7 @@ export async function syncFullAppToCloudServer(
       lastUpdated: new Date(now).toISOString(),
       lastUpdatedTimestamp: now,
       serverAdmin: ADMIN_EMAIL,
-      updateTitle: 'PS Invoice Master Database Sync',
+      updateTitle: 'PSN Invoice Master Database Sync',
       updateNotes: `Automated snapshot containing ${snapshot.invoices.length} invoices, ${snapshot.clients.length} clients, and ${snapshot.userProfiles.length} registered access profiles.`,
       schemaVersion: snapshot.metadata.schemaVersion || 2,
       totalInvoices: snapshot.invoices.length,

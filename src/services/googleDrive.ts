@@ -11,10 +11,10 @@ export interface DriveSyncResult {
   error?: string;
 }
 
-const FOLDER_NAME = 'PS Invoice - Backup';
+const FOLDER_NAME = 'PSN Invoice - Backup';
 
 /**
- * Searches for or creates the PS Invoice folder in Google Drive
+ * Searches for or creates the PSN Invoice folder in Google Drive
  */
 export async function getOrCreateInvoiceFolder(accessToken: string): Promise<{ id: string; webViewLink?: string }> {
   // 1. Search for existing folder
@@ -52,7 +52,7 @@ export async function getOrCreateInvoiceFolder(accessToken: string): Promise<{ i
     body: JSON.stringify({
       name: FOLDER_NAME,
       mimeType: 'application/vnd.google-apps.folder',
-      description: 'PS Invoice automated cloud storage and backup folder',
+      description: 'PSN Invoice automated cloud storage and backup folder',
     }),
   });
 

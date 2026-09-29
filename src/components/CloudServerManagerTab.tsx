@@ -66,7 +66,7 @@ export function CloudServerManagerTab({
 }: CloudServerManagerTabProps) {
   // App Update Publisher state
   const [updateVersion, setUpdateVersion] = useState<string>(CURRENT_APP_VERSION);
-  const [updateTitle, setUpdateTitle] = useState<string>('PS Invoice Cloud Server Update');
+  const [updateTitle, setUpdateTitle] = useState<string>('PSN Invoice Cloud Server Update');
   const [updateNotes, setUpdateNotes] = useState<string>(
     'Centralized cloud database and automatic app synchronization enabled via psgss91@gmail.com Google Drive.'
   );
@@ -113,7 +113,7 @@ export function CloudServerManagerTab({
     try {
       const res = await publishCloudAppUpdate(driveAccessToken, {
         version: updateVersion.trim(),
-        title: updateTitle.trim() || 'PS Invoice Update',
+        title: updateTitle.trim() || 'PSN Invoice Update',
         notes: updateNotes.trim(),
         broadcast: broadcastMsg.trim(),
         currentInvoicesCount: savedInvoicesCount,
