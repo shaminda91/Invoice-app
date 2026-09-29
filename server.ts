@@ -412,9 +412,7 @@ app.post('/api/users/mark-read', (req, res) => {
 // 7. System status & Super Admin summary
 app.get('/api/system/status', (req, res) => {
   const db = loadDatabase();
-  const clients = db.users.filter(
-    (u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()
-  );
+  const clients = db.users.filter((u) => u.userId?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
   const unread = clients.filter((c) => c.unreadBySuperAdmin);
 
   res.json({
@@ -433,15 +431,11 @@ app.get('/api/system/status', (req, res) => {
   });
 });
 
-// -------------------------------------------------------------
 // VITE DEV MIDDLEWARE OR PRODUCTION STATIC SERVING
 // -------------------------------------------------------------
 async function startServer() {
   if (process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(__dirname, 'dist'))) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-    });
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
