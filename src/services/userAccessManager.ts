@@ -15,6 +15,7 @@ import {
 } from './googleDrive';
 import {
   registerUserOnServer,
+  registerClientByAdmin,
   updateUserRoleOnServer,
   updateUserAccessOnServer,
   approveUserOnServer,
@@ -389,7 +390,10 @@ export function isUserAdmin(email?: string | null): boolean {
  * Returns detailed access info: { isAllowed, isAdmin, isSuperAdmin, role, permissions, daysRemaining, isExpired, isBlocked, profile }
  * STRICT: Only psgss91@gmail.com is granted isAdmin: true and isSuperAdmin: true.
  */
-export function checkUserAccessStatus(user: { uid: string; email: string | null } | null): {
+export function checkUserAccessStatus(
+  user: { uid: string; email: string | null } | null,
+  providedProfiles?: UserAccessProfile[]
+): {
   isAllowed: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
@@ -436,7 +440,7 @@ export function checkUserAccessStatus(user: { uid: string; email: string | null 
     };
   }
 
-  const profiles = getAllUserProfiles();
+  const profiles = providedProfiles && providedProfiles.length > 0 ? providedProfiles : getAllUserProfiles();
   const profile = profiles.find(
     (p) => p.userId === user.uid || p.email.toLowerCase() === userEmail
   );
@@ -879,16 +883,16 @@ export function registerNewClientManually(
 
   persistProfiles(profiles);
 
-  // Sync to central server
-  registerUserOnServer({
-    uid: profile.userId,
-    email: profile.email,
-    displayName: profile.displayName,
-  }).then(() => {
-    if (initialRole !== 'client') {
-      updateUserRoleOnServer(profile.userId, initialRole).catch(() => {});
-    }
-  }).catch(() => {});
+  // Sync directly to Firestore
+  registerClientByAdmin({
+    email: cleanEmail,
+    name: profile.displayName,
+    role: initialRole,
+    allowedDays,
+    notes: profile.notes,
+  }).catch((err) => {
+    console.warn('Failed to register client in Firestore:', err);
+  });
 
   return profile;
 }

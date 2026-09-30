@@ -11,34 +11,15 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
+import { registerUserOnServer, submitApprovalRequest } from './superAdminApi';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 const registerFirestoreUser = async (user: User) => {
-  if (!user.uid || !user.email) return;
-
-  const userRef = doc(db, 'users', user.uid);
-  const existingSnap = await getDoc(userRef);
-  const existing = existingSnap.exists() ? existingSnap.data() : null;
-
-  const isSuperAdmin = user.email.trim().toLowerCase() === 'psgss91@gmail.com';
-
-  await setDoc(userRef, {
-    uid: user.uid,
-    email: user.email,
-    displayName: user.displayName || existing?.displayName || 'Google User',
-    ...(isSuperAdmin
-      ? { role: 'super_admin' }
-      : !existing
-        ? { role: 'user' }
-        : {}),
-    ownerEmail: 'psgss91@gmail.com',
-    lastLoginAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  }, { merge: true });
+  return registerUserOnServer(user);
 };
 
 export const DRIVE_SCOPES = [
@@ -212,36 +193,7 @@ export const submitApprovalRequestToFirestore = async (user: {
   photoURL?: string | null;
 }): Promise<boolean> => {
   if (!user.uid || !user.email) return false;
-
-  try {
-    const isRootAdmin = user.email.trim().toLowerCase() === 'psgss91@gmail.com';
-
-    await setDoc(doc(db, 'approval_requests', user.uid), {
-      userId: user.uid,
-      email: user.email,
-      displayName: user.displayName || 'Google User',
-      photoURL: user.photoURL || null,
-      status: isRootAdmin ? 'approved' : 'pending',
-      targetAdminEmail: 'psgss91@gmail.com',
-      requestedAt: serverTimestamp(),
-    }, { merge: true });
-
-    await setDoc(doc(db, 'users', user.uid), {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName || 'Google User',
-      photoURL: user.photoURL || null,
-      role: isRootAdmin ? 'super_admin' : 'client',
-      status: isRootAdmin ? 'unlimited' : 'pending',
-      ownerEmail: 'psgss91@gmail.com',
-      lastLoginAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    return true;
-  } catch (err) {
-    console.warn('Could not submit request to Firestore:', err);
-    return false;
-  }
+  const res = await submitApprovalRequest(user, 'User submitted Approval Request');
+  return res.success;
 };
 

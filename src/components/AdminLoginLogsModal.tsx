@@ -33,6 +33,7 @@ import {
 } from '../services/userAccessManager';
 import {
   fetchServerUsers,
+  subscribeToFirestoreUsers,
   markRegistrationsAsReadOnServer,
   updateUserAccessOnServer,
 } from '../services/superAdminApi';
@@ -157,8 +158,12 @@ export function AdminLoginLogsModal({
       if (initialRoleFilter) {
         setRoleFilter(initialRoleFilter);
       }
-      // Auto-refresh data every 3 seconds while modal is open so approval requests appear live
-      const liveInterval = setInterval(refreshData, 3000);
+      // Real-time Firestore sync while modal is open
+      const unsubFirestore = subscribeToFirestoreUsers((res) => {
+        if (res && Array.isArray(res.users)) {
+          setUserProfiles(res.users);
+        }
+      });
 
       // Auto-fetch from Drive if token is available
       if (driveAccessToken) {
@@ -174,7 +179,9 @@ export function AdminLoginLogsModal({
         }).catch(() => {});
       }
 
-      return () => clearInterval(liveInterval);
+      return () => {
+        unsubFirestore();
+      };
     }
   }, [isOpen, initialTab, initialRoleFilter, driveAccessToken]);
 

@@ -11,45 +11,48 @@ service cloud.firestore {
       return signedIn()
         && request.auth.token.email != null
         && request.auth.token.email.lower() == 'psgss91@gmail.com'
-        && request.auth.token.email_verified == true;
+        && (request.auth.token.email_verified == true || request.auth.token.firebase.sign_in_provider == 'google.com');
     }
 
     function isOwner(userId) {
       return signedIn() && request.auth.uid == userId;
     }
 
-    // User accounts
+    // User accounts collection
     match /users/{userId} {
-      // Super Admin can manage all users.
+      // Super Admin (psgss91@gmail.com) can manage all users.
       allow read, write: if isSuperAdmin();
 
       // Normal user can read only their own profile.
       allow read: if isOwner(userId);
 
-      // User can create only their own normal-user profile.
+      // User can create only their own normal-user profile with status pending and client/user role.
       allow create: if isOwner(userId)
-        && request.resource.data.role == 'user'
-        && request.resource.data.ownerEmail == 'psgss91@gmail.com';
+        && (request.resource.data.role == 'client' || request.resource.data.role == 'user')
+        && request.resource.data.status == 'pending'
+        && request.resource.data.allowedDays == 0
+        && (request.resource.data.ownerEmail == 'psgss91@gmail.com' || request.resource.data.parentAdminEmail == 'psgss91@gmail.com');
 
-      // User cannot change role or ownership.
+      // User cannot change role, status, allowedDays, expiresAt, or ownership.
       allow update: if isOwner(userId)
         && request.resource.data.role == resource.data.role
-        && request.resource.data.ownerEmail == resource.data.ownerEmail;
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'allowedDays', 'expiresAt', 'parentAdminEmail', 'ownerEmail']));
 
       // Normal users cannot delete profiles.
       allow delete: if isSuperAdmin();
     }
 
-    // Access approval requests
+    // Access approval requests submitted to Super Admin
     match /approval_requests/{requestId} {
       allow read: if isSuperAdmin()
         || (signedIn() && resource.data.userId == request.auth.uid);
 
       allow create: if signedIn()
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending';
 
       allow update: if isSuperAdmin()
-        || (signedIn() && resource.data.userId == request.auth.uid);
+        || (signedIn() && resource.data.userId == request.auth.uid && request.resource.data.status == 'pending');
 
       allow delete: if isSuperAdmin();
     }

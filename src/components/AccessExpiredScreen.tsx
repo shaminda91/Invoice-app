@@ -8,7 +8,7 @@ import {
   createApprovalRequestGmailLink,
 } from '../services/userAccessManager';
 import { submitApprovalRequest } from '../services/superAdminApi';
-import { submitApprovalRequestToFirestore } from '../services/googleAuth';
+import { auth } from '../services/googleAuth';
 import {
   Clock,
   AlertTriangle,
@@ -60,21 +60,17 @@ export function AccessExpiredScreen({
   useEffect(() => {
     if (isPending && userEmail && userEmail !== 'No Email' && userEmail !== 'Guest Session') {
       const userPayload = {
-        uid: profile?.userId || `user_${Date.now()}`,
+        uid: auth.currentUser?.uid || profile?.userId || `user_${Date.now()}`,
         email: userEmail,
-        displayName: userName || profile?.displayName || userEmail.split('@')[0],
-        photoURL: profile?.photoURL,
+        displayName: userName || profile?.displayName || auth.currentUser?.displayName || userEmail.split('@')[0],
+        photoURL: profile?.photoURL || auth.currentUser?.photoURL || undefined,
       };
 
-      // 1. Submit to server database
       submitApprovalRequest(userPayload, 'Awaiting Admin Approval').then((res) => {
         if (res.success) {
           setRequestSentSuccess(true);
         }
       }).catch(() => {});
-
-      // 2. Submit to Firestore
-      submitApprovalRequestToFirestore(userPayload).catch(() => {});
     }
   }, [isPending, userEmail, userName, profile?.userId]);
 
@@ -82,7 +78,7 @@ export function AccessExpiredScreen({
   useEffect(() => {
     const interval = setInterval(() => {
       onRefreshStatus();
-    }, 5000);
+    }, 4000);
     return () => clearInterval(interval);
   }, [onRefreshStatus]);
 
@@ -94,24 +90,15 @@ export function AccessExpiredScreen({
     setRequestStatusMessage(null);
 
     const userPayload = {
-      uid: profile?.userId || `user_${Date.now()}`,
+      uid: auth.currentUser?.uid || profile?.userId || `user_${Date.now()}`,
       email: userEmail,
-      displayName: userName || profile?.displayName || userEmail.split('@')[0],
-      photoURL: profile?.photoURL,
+      displayName: userName || profile?.displayName || auth.currentUser?.displayName || userEmail.split('@')[0],
+      photoURL: profile?.photoURL || auth.currentUser?.photoURL || undefined,
     };
 
     try {
-      // Send to both central server and Firestore
-      const [serverRes, firestoreOk] = await Promise.allSettled([
-        submitApprovalRequest(userPayload, 'User clicked Send Request in App'),
-        submitApprovalRequestToFirestore(userPayload),
-      ]);
-
-      const success =
-        (serverRes.status === 'fulfilled' && serverRes.value.success) ||
-        (firestoreOk.status === 'fulfilled' && firestoreOk.value === true);
-
-      if (success) {
+      const res = await submitApprovalRequest(userPayload, 'User clicked Send Request in App');
+      if (res.success) {
         setRequestSentSuccess(true);
         setRequestStatusMessage(
           language === 'si'
@@ -142,18 +129,14 @@ export function AccessExpiredScreen({
     setRequestStatusMessage(null);
 
     const userPayload = {
-      uid: profile?.userId || `user_${Date.now()}`,
+      uid: auth.currentUser?.uid || profile?.userId || `user_${Date.now()}`,
       email: userEmail,
-      displayName: userName || profile?.displayName || userEmail.split('@')[0],
-      photoURL: profile?.photoURL,
+      displayName: userName || profile?.displayName || auth.currentUser?.displayName || userEmail.split('@')[0],
+      photoURL: profile?.photoURL || auth.currentUser?.photoURL || undefined,
     };
 
     try {
-      // 1. Immediately register request on Central Server & Firestore so Admin sees it in real-time
-      await Promise.allSettled([
-        submitApprovalRequest(userPayload, 'User submitted Email Approval Request'),
-        submitApprovalRequestToFirestore(userPayload),
-      ]);
+      await submitApprovalRequest(userPayload, 'User submitted Email Approval Request');
       setRequestSentSuccess(true);
     } catch (e) {
       console.warn('Error saving approval request:', e);

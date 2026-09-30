@@ -4,6 +4,7 @@ import {
   SavedCompany,
   SavedClient,
   UserLoginRecord,
+  UserAccessProfile,
   ADMIN_EMAIL,
   SUPER_ADMIN_EMAIL,
   UserRole,
@@ -27,7 +28,13 @@ import {
   saveAccessSettings,
   fetchProfilesFromDrive,
 } from './services/userAccessManager';
-import { fetchServerUsers } from './services/superAdminApi';
+import {
+  fetchServerUsers,
+  subscribeToFirestoreUsers,
+  subscribeToUserProfile,
+  fetchUserProfile,
+  seedInitialAdminUsers,
+} from './services/superAdminApi';
 import {
   recordUserLogin,
   getLoginRecords,
@@ -37,7 +44,8 @@ import { calculateInvoiceTotals, formatCurrency, generateInvoiceNumber } from '.
 import { exportInvoiceToExcel, exportInvoiceToPDF } from './utils/exportUtils';
 import { AppLanguage, translations } from './i18n/translations';
 import { User } from 'firebase/auth';
-import { initAuth, signInWithGoogleDrive, logOutGoogle } from './services/googleAuth';
+import { initAuth, signInWithGoogleDrive, logOutGoogle, db } from './services/googleAuth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { syncInvoiceToGoogleDrive, DriveSyncResult } from './services/googleDrive';
 import { GoogleDriveSyncModal } from './components/GoogleDriveSyncModal';
 import {
@@ -308,15 +316,51 @@ export default function App() {
     };
   }, []);
 
-  // Continuous real-time synchronization with server database every 3 seconds
+  // Real-time synchronization with Firestore users
   useEffect(() => {
-    loadServerUsers();
-    const pollInterval = setInterval(() => {
-      loadServerUsers();
-    }, 3000);
+    if (!googleUser) {
+      setServerUsers(getAllUserProfiles());
+      return;
+    }
 
-    return () => clearInterval(pollInterval);
-  }, []);
+    const isSuperAdmin = googleUser.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+
+    if (isSuperAdmin) {
+      // 1. Seed initial registered clients if database is fresh
+      seedInitialAdminUsers().catch(() => {});
+
+      // 2. Fetch fresh users for reactivity
+      loadServerUsers();
+
+      // 3. Super Admin: listen to all users & approval requests in real-time
+      const unsubscribe = subscribeToFirestoreUsers((res) => {
+        setServerUsers(res.users);
+        setAccessRefreshCounter((c) => c + 1);
+      });
+      return () => unsubscribe();
+    } else {
+      // Normal user: fetch and listen ONLY to own profile document in Firestore for instant approval unlock
+      fetchUserProfile(googleUser.uid)
+        .then((prof) => {
+          if (prof) {
+            setServerUsers([prof]);
+            setAccessRefreshCounter((c) => c + 1);
+          }
+        })
+        .catch(() => {});
+
+      const unsubscribe = subscribeToUserProfile(googleUser.uid, (prof) => {
+        if (prof) {
+          setServerUsers([prof]);
+          setAccessRefreshCounter((c) => c + 1);
+        }
+      });
+
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [googleUser]);
 
   // Persist Drive auto-save preference
   const handleToggleAutoSave = (enabled: boolean) => {
@@ -974,28 +1018,52 @@ export default function App() {
   // User access & subscription status calculation
   const accessCheck = React.useMemo(() => {
     if (googleUser) {
-      return checkUserAccessStatus(googleUser);
+      return checkUserAccessStatus(googleUser, serverUsers);
     }
     if (isGuestMode) {
       const guest = checkGuestAccessStatus();
       return {
         isAllowed: guest.isAllowed,
         isAdmin: false,
+        isSuperAdmin: false,
+        role: 'client' as const,
+        permissions: {
+          canCreateInvoice: false,
+          canEditInvoice: false,
+          canDeleteInvoice: false,
+          canExportPDF: true,
+          canManageClients: false,
+          canViewReports: false,
+          canManageUsers: false,
+        },
         daysRemaining: guest.daysRemaining,
         isExpired: guest.isExpired,
         isBlocked: false,
+        isPendingApproval: false,
         profile: null,
       };
     }
     return {
       isAllowed: false,
       isAdmin: false,
+      isSuperAdmin: false,
+      role: 'client' as const,
+      permissions: {
+        canCreateInvoice: false,
+        canEditInvoice: false,
+        canDeleteInvoice: false,
+        canExportPDF: true,
+        canManageClients: false,
+        canViewReports: false,
+        canManageUsers: false,
+      },
       daysRemaining: 0,
       isExpired: false,
       isBlocked: false,
+      isPendingApproval: true,
       profile: null,
     };
-  }, [googleUser, isGuestMode, accessRefreshCounter]);
+  }, [googleUser, isGuestMode, accessRefreshCounter, serverUsers]);
 
   // Registered clients stats for Admin notification message
   const registeredClients = React.useMemo(() => {
