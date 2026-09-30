@@ -77,6 +77,7 @@ interface AdminLoginLogsModalProps {
   initialRoleFilter?: string;
   user?: any;
   driveAccessToken?: string | null;
+  serverUsers?: UserAccessProfile[];
   onSyncAllToCloud?: () => Promise<CloudSyncSummary | null>;
   onRestoreFromCloud?: () => Promise<boolean>;
   isCloudSyncing?: boolean;
@@ -97,6 +98,7 @@ export function AdminLoginLogsModal({
   initialRoleFilter,
   user,
   driveAccessToken,
+  serverUsers,
   onSyncAllToCloud,
   onRestoreFromCloud,
   isCloudSyncing = false,
@@ -114,8 +116,15 @@ export function AdminLoginLogsModal({
   const [defaultDaysInput, setDefaultDaysInput] = useState<number>(() => getAccessSettings().defaultAllowedDays);
   const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
 
-  // User profiles state
-  const [userProfiles, setUserProfiles] = useState<UserAccessProfile[]>([]);
+  // User profiles state - sourced from serverUsers / Firestore
+  const [userProfiles, setUserProfiles] = useState<UserAccessProfile[]>(() => serverUsers || []);
+
+  useEffect(() => {
+    if (serverUsers && serverUsers.length > 0) {
+      setUserProfiles(serverUsers);
+    }
+  }, [serverUsers]);
+
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [customDaysInput, setCustomDaysInput] = useState<number>(7);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -139,16 +148,15 @@ export function AdminLoginLogsModal({
     setDefaultDaysInput(currentSettings.defaultAllowedDays);
     setNewClientDays(currentSettings.defaultAllowedDays);
 
-    // Fetch fresh users and pending requests from Firestore
+    // Requirement: Fetch fresh users and pending requests directly from Firestore.
+    // Do NOT wipe or replace with empty localStorage!
     try {
       const res = await fetchServerUsers();
       if (res && Array.isArray(res.users) && res.users.length > 0) {
         setUserProfiles(res.users);
-      } else {
-        setUserProfiles(getAllUserProfiles());
       }
-    } catch {
-      setUserProfiles(getAllUserProfiles());
+    } catch (err) {
+      console.warn('Failed to refresh from Firestore:', err);
     }
   };
 

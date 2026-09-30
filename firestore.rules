@@ -11,7 +11,8 @@ service cloud.firestore {
     function isSuperAdmin() {
       return signedIn()
         && request.auth.token.email != null
-        && request.auth.token.email.lower() == 'psgss91@gmail.com';
+        && (request.auth.token.email == 'psgss91@gmail.com'
+            || request.auth.token.email.matches('(?i)^psgss91@gmail[.]com$'));
     }
 
     function isOwner(userId) {
@@ -25,7 +26,7 @@ service cloud.firestore {
 
       // Normal user can read only their own profile.
       allow get: if isOwner(userId);
-      allow list: if signedIn() && resource.data.uid == request.auth.uid;
+      allow list: if signedIn() && (isSuperAdmin() || resource.data.uid == request.auth.uid);
 
       // Normal user can create only their own profile with role user/client and status pending.
       allow create: if isOwner(userId)
@@ -33,9 +34,10 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.ownerEmail == 'psgss91@gmail.com';
 
-      // Normal user cannot change their own role, status, allowedDays, expiresAt, or ownerEmail.
+      // Normal user can update metadata or ensure status remains 'pending', but can NEVER change role, allowedDays, expiresAt, ownerEmail, or approve themselves ('active'/'unlimited')
       allow update: if isOwner(userId)
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'allowedDays', 'expiresAt', 'ownerEmail', 'parentAdminEmail']));
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'allowedDays', 'expiresAt', 'ownerEmail', 'parentAdminEmail']))
+        && (request.resource.data.status == resource.data.status || request.resource.data.status == 'pending');
 
       // Normal users cannot delete profiles.
       allow delete: if isSuperAdmin();
@@ -48,11 +50,11 @@ service cloud.firestore {
 
       // Normal user can read only their own approval request.
       allow get: if signedIn() && (requestId == request.auth.uid || resource.data.userId == request.auth.uid);
-      allow list: if signedIn() && resource.data.userId == request.auth.uid;
+      allow list: if signedIn() && (isSuperAdmin() || resource.data.userId == request.auth.uid);
 
       // Normal user can create an approval request for themselves with status pending.
       allow create: if signedIn()
-        && request.resource.data.userId == request.auth.uid
+        && (request.resource.data.userId == request.auth.uid || requestId == request.auth.uid)
         && request.resource.data.status == 'pending'
         && request.resource.data.ownerEmail == 'psgss91@gmail.com';
 

@@ -88,73 +88,50 @@ export function mapDocToProfile(docSnap: any): UserAccessProfile {
 }
 
 /**
- * Seed initial test registered client (psdata91@gmail.com) if Firestore is fresh
- * Ensures Admin never sees an empty registered list on Cloudflare deployment.
+ * Clean up legacy test seed user if it exists in Firestore
  */
-export async function seedInitialAdminUsers(): Promise<void> {
+export async function cleanUpTestSeededUser(): Promise<void> {
   try {
     const testDoc = doc(db, 'users', 'test_psdata91');
     const snap = await getDoc(testDoc);
-    if (!snap.exists()) {
-      const now = Date.now();
-      const dateStr = new Date(now).toLocaleDateString();
-      const timeStr = new Date(now).toLocaleString();
-      await setDoc(testDoc, {
-        userId: 'test_psdata91',
-        uid: 'test_psdata91',
-        email: 'psdata91@gmail.com',
-        displayName: 'pramesh shaminda',
-        photoURL: null,
-        role: 'user',
-        status: 'pending',
-        allowedDays: 0,
-        expiresAt: now,
-        expiresAtString: dateStr,
-        firstLoginTime: now,
-        firstLoginString: dateStr,
-        lastLoginTime: now,
-        lastLoginString: timeStr,
-        notes: 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
-        unreadBySuperAdmin: true,
-        ownerEmail: SUPER_ADMIN_EMAIL,
-        parentAdminEmail: SUPER_ADMIN_EMAIL,
-        createdAt: serverTimestamp(),
-        lastLoginAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        permissions: getDefaultPermissions('user' as UserRole),
-      });
-      await setDoc(doc(db, 'approval_requests', 'test_psdata91'), {
-        requestId: 'test_psdata91',
-        userId: 'test_psdata91',
-        email: 'psdata91@gmail.com',
-        displayName: 'pramesh shaminda',
-        photoURL: null,
-        status: 'pending',
-        notes: 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
-        ownerEmail: SUPER_ADMIN_EMAIL,
-        targetAdminEmail: SUPER_ADMIN_EMAIL,
-        createdAt: serverTimestamp(),
-        requestedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    if (snap.exists()) {
+      await deleteDoc(testDoc);
     }
-  } catch (err) {
-    console.warn('Initial seed error:', err);
-  }
+    const testReq = doc(db, 'approval_requests', 'test_psdata91');
+    const snapReq = await getDoc(testReq);
+    if (snapReq.exists()) {
+      await deleteDoc(testReq);
+    }
+  } catch {}
 }
+
+// Backward compatibility alias for any existing caller
+export const seedInitialAdminUsers = cleanUpTestSeededUser;
 
 /**
  * Fetch all users registered under Super Admin directly from Firestore
- * (Super Admin exclusive operation)
+ * Queries /users where ownerEmail == "psgss91@gmail.com" and /approval_requests
  */
 export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
   try {
-    const usersCol = collection(db, 'users');
-    const reqCol = collection(db, 'approval_requests');
+    const usersQuery = query(
+      collection(db, 'users'),
+      where('ownerEmail', '==', SUPER_ADMIN_EMAIL)
+    );
+    const reqQuery = query(
+      collection(db, 'approval_requests'),
+      where('ownerEmail', '==', SUPER_ADMIN_EMAIL)
+    );
 
     const [snapshot, reqSnap] = await Promise.all([
-      getDocs(usersCol),
-      getDocs(reqCol).catch(() => ({ docs: [] } as any)),
+      getDocs(usersQuery).catch((e) => {
+        console.warn('Error querying /users where ownerEmail, falling back to collection:', e);
+        return getDocs(collection(db, 'users'));
+      }),
+      getDocs(reqQuery).catch((e) => {
+        console.warn('Error querying /approval_requests where ownerEmail, falling back:', e);
+        return getDocs(collection(db, 'approval_requests')).catch(() => ({ docs: [] } as any));
+      }),
     ]);
 
     let users: UserAccessProfile[] = snapshot.docs.map((docSnap) => mapDocToProfile(docSnap));
@@ -228,8 +205,27 @@ export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
       users.unshift(superAdminProfile);
     }
 
+    // Deduplicate and filter out any artificial dummy accounts
+    const dedupedUsers: UserAccessProfile[] = [];
+    const seenKeys = new Set<string>();
+
+    users.forEach((u) => {
+      if (u.userId === 'test_psdata91') return;
+      const emailKey = u.email.trim().toLowerCase();
+      const primaryKey = emailKey === SUPER_ADMIN_EMAIL.toLowerCase() ? emailKey : (u.userId || emailKey);
+      if (seenKeys.has(primaryKey)) {
+        const idx = dedupedUsers.findIndex((x) => x.userId === u.userId || x.email.toLowerCase() === emailKey);
+        if (idx >= 0 && u.status === 'pending') {
+          dedupedUsers[idx] = { ...dedupedUsers[idx], status: 'pending', unreadBySuperAdmin: true };
+        }
+        return;
+      }
+      seenKeys.add(primaryKey);
+      dedupedUsers.push(u);
+    });
+
     // Sort: Super Admin first, then pending approvals, then unread, then recent logins
-    users.sort((a, b) => {
+    dedupedUsers.sort((a, b) => {
       if (a.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return -1;
       if (b.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return 1;
       if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -240,22 +236,22 @@ export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
     });
 
     try {
-      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(users));
+      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(dedupedUsers));
     } catch {}
 
-    const clientsOnly = users.filter((u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
+    const clientsOnly = dedupedUsers.filter((u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
     const unreadCount = clientsOnly.filter((u) => u.unreadBySuperAdmin || u.status === 'pending').length;
 
     return {
       superAdmin: SUPER_ADMIN_EMAIL,
       defaultAllowedDays: 7,
-      totalUsers: users.length,
+      totalUsers: dedupedUsers.length,
       unreadCount,
-      users,
+      users: dedupedUsers,
     };
   } catch (err) {
     console.warn('Error fetching Firestore users:', err);
-    const cached = getCachedProfiles();
+    const cached = getCachedProfiles().filter((u) => u.userId !== 'test_psdata91');
     return {
       superAdmin: SUPER_ADMIN_EMAIL,
       defaultAllowedDays: 7,
@@ -268,12 +264,19 @@ export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
 
 /**
  * Real-time listener for Firestore users & approval requests (Super Admin exclusive)
+ * Listens to /users where ownerEmail == "psgss91@gmail.com" and /approval_requests
  */
 export function subscribeToFirestoreUsers(
   onUpdate: (res: ServerUsersResponse) => void
 ): () => void {
-  const usersCol = collection(db, 'users');
-  const reqCol = collection(db, 'approval_requests');
+  const usersQuery = query(
+    collection(db, 'users'),
+    where('ownerEmail', '==', SUPER_ADMIN_EMAIL)
+  );
+  const reqQuery = query(
+    collection(db, 'approval_requests'),
+    where('ownerEmail', '==', SUPER_ADMIN_EMAIL)
+  );
 
   let latestUsersDocs: any[] = [];
   let latestReqDocs: any[] = [];
@@ -348,7 +351,25 @@ export function subscribeToFirestoreUsers(
       });
     }
 
-    users.sort((a, b) => {
+    const dedupedUsers: UserAccessProfile[] = [];
+    const seenKeys = new Set<string>();
+
+    users.forEach((u) => {
+      if (u.userId === 'test_psdata91') return;
+      const emailKey = u.email.trim().toLowerCase();
+      const primaryKey = emailKey === SUPER_ADMIN_EMAIL.toLowerCase() ? emailKey : (u.userId || emailKey);
+      if (seenKeys.has(primaryKey)) {
+        const idx = dedupedUsers.findIndex((x) => x.userId === u.userId || x.email.toLowerCase() === emailKey);
+        if (idx >= 0 && u.status === 'pending') {
+          dedupedUsers[idx] = { ...dedupedUsers[idx], status: 'pending', unreadBySuperAdmin: true };
+        }
+        return;
+      }
+      seenKeys.add(primaryKey);
+      dedupedUsers.push(u);
+    });
+
+    dedupedUsers.sort((a, b) => {
       if (a.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return -1;
       if (b.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return 1;
       if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -359,46 +380,91 @@ export function subscribeToFirestoreUsers(
     });
 
     try {
-      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(users));
+      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(dedupedUsers));
     } catch {}
 
-    const clientsOnly = users.filter((u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
+    const clientsOnly = dedupedUsers.filter((u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
     const unreadCount = clientsOnly.filter((u) => u.unreadBySuperAdmin || u.status === 'pending').length;
 
     onUpdate({
       superAdmin: SUPER_ADMIN_EMAIL,
       defaultAllowedDays: 7,
-      totalUsers: users.length,
+      totalUsers: dedupedUsers.length,
       unreadCount,
-      users,
+      users: dedupedUsers,
     });
   };
 
+  let unsubFallbackUsers: (() => void) | null = null;
+  let unsubFallbackReqs: (() => void) | null = null;
+
   const unsubUsers = onSnapshot(
-    usersCol,
+    usersQuery,
     (snap) => {
       latestUsersDocs = snap.docs;
       emit();
     },
     (err) => {
-      console.warn('Real-time Firestore users listener error:', err);
+      console.warn('Real-time users query listener error, falling back to all users:', err);
+      try {
+        unsubFallbackUsers = onSnapshot(
+          collection(db, 'users'),
+          (s) => {
+            latestUsersDocs = s.docs;
+            emit();
+          },
+          (e) => {
+            console.warn('Fallback users snapshot listener error:', e);
+          }
+        );
+      } catch (innerErr) {
+        console.warn('Could not attach fallback users listener:', innerErr);
+      }
     }
   );
 
   const unsubReqs = onSnapshot(
-    reqCol,
+    reqQuery,
     (snap) => {
       latestReqDocs = snap.docs;
       emit();
     },
     (err) => {
-      console.warn('Real-time approval requests listener error:', err);
+      console.warn('Real-time approval requests listener error, falling back to all reqs:', err);
+      try {
+        unsubFallbackReqs = onSnapshot(
+          collection(db, 'approval_requests'),
+          (s) => {
+            latestReqDocs = s.docs;
+            emit();
+          },
+          (e) => {
+            console.warn('Fallback approval requests snapshot listener error:', e);
+          }
+        );
+      } catch (innerErr) {
+        console.warn('Could not attach fallback approval requests listener:', innerErr);
+      }
     }
   );
 
   return () => {
-    unsubUsers();
-    unsubReqs();
+    try {
+      unsubUsers();
+    } catch {}
+    try {
+      unsubReqs();
+    } catch {}
+    if (unsubFallbackUsers) {
+      try {
+        unsubFallbackUsers();
+      } catch {}
+    }
+    if (unsubFallbackReqs) {
+      try {
+        unsubFallbackReqs();
+      } catch {}
+    }
   };
 }
 
@@ -1084,16 +1150,18 @@ export async function submitApprovalRequest(
         userId: user.uid,
         lastLoginTime: now,
         lastLoginString: timeStr,
-        status: existing.status === 'unlimited' ? 'unlimited' : existing.status,
+        status: 'pending',
         unreadBySuperAdmin: true,
         notes: note || `Approval Requested on ${timeStr}`,
       };
 
       await updateDoc(userRef, {
+        status: 'pending',
         unreadBySuperAdmin: true,
         notes: note || `Approval Requested on ${timeStr}`,
         lastLoginTime: now,
         lastLoginString: timeStr,
+        lastLoginAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
     }

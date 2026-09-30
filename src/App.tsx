@@ -256,8 +256,17 @@ export default function App() {
   const t = translations[language];
 
   // Helper to load fresh server users and update reactivity
-  const loadServerUsers = async () => {
+  const loadServerUsers = async (targetUser?: User | null) => {
     try {
+      const activeUser = targetUser !== undefined ? targetUser : googleUser;
+      if (activeUser && activeUser.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+        const prof = await fetchUserProfile(activeUser.uid);
+        if (prof) {
+          setServerUsers([prof]);
+          setAccessRefreshCounter((c) => c + 1);
+        }
+        return;
+      }
       const res = await fetchServerUsers();
       if (res && Array.isArray(res.users) && res.users.length > 0) {
         setServerUsers(res.users);
@@ -290,7 +299,7 @@ export default function App() {
         }
 
         // Fetch latest registered profiles from server so user status updates immediately
-        loadServerUsers();
+        loadServerUsers(user);
 
         // If super admin logs in, auto-fetch login records from Google Drive
         if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
@@ -1119,11 +1128,18 @@ export default function App() {
           showToast(t.logout);
         }}
         onRefreshStatus={async () => {
-          try {
-            await fetchServerUsers();
-          } catch {}
-          setAccessRefreshCounter((c) => c + 1);
           if (googleUser) {
+            try {
+              if (googleUser.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+                await fetchServerUsers();
+              } else {
+                const prof = await fetchUserProfile(googleUser.uid);
+                if (prof) {
+                  setServerUsers([prof]);
+                }
+              }
+            } catch {}
+            setAccessRefreshCounter((c) => c + 1);
             const recheck = checkUserAccessStatus(googleUser);
             if (recheck.isAllowed) {
               showToast(language === 'si' ? 'ගිණුම අනුමත කර ඇත! සාදරයෙන් පිළිගනිමු.' : 'Account approved! Welcome.');
@@ -2262,6 +2278,7 @@ export default function App() {
         initialRoleFilter={adminModalRoleFilter}
         user={googleUser}
         driveAccessToken={driveAccessToken}
+        serverUsers={serverUsers}
         onSyncAllToCloud={handleSyncAllToCloud}
         onRestoreFromCloud={handleRestoreFromCloud}
         isCloudSyncing={isCloudSyncing}
