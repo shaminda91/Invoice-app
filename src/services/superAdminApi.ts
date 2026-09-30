@@ -54,7 +54,7 @@ export function getCachedProfiles(): UserAccessProfile[] {
 export function mapDocToProfile(docSnap: any): UserAccessProfile {
   const data = docSnap.data ? docSnap.data() : docSnap;
   const isSuperAdmin = (data.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-  const rawRole = isSuperAdmin ? 'super_admin' : (data.role === 'user' ? 'client' : data.role || 'client');
+  const rawRole = isSuperAdmin ? 'super_admin' : (data.role || 'user');
   const role: UserRole = rawRole as UserRole;
   const now = Date.now();
 
@@ -88,7 +88,7 @@ export function mapDocToProfile(docSnap: any): UserAccessProfile {
 }
 
 /**
- * Seed initial registered client (psdata91@gmail.com) if Firestore is fresh
+ * Seed initial test registered client (psdata91@gmail.com) if Firestore is fresh
  * Ensures Admin never sees an empty registered list on Cloudflare deployment.
  */
 export async function seedInitialAdminUsers(): Promise<void> {
@@ -104,7 +104,8 @@ export async function seedInitialAdminUsers(): Promise<void> {
         uid: 'test_psdata91',
         email: 'psdata91@gmail.com',
         displayName: 'pramesh shaminda',
-        role: 'client',
+        photoURL: null,
+        role: 'user',
         status: 'pending',
         allowedDays: 0,
         expiresAt: now,
@@ -120,15 +121,19 @@ export async function seedInitialAdminUsers(): Promise<void> {
         createdAt: serverTimestamp(),
         lastLoginAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        permissions: getDefaultPermissions('client'),
+        permissions: getDefaultPermissions('user' as UserRole),
       });
       await setDoc(doc(db, 'approval_requests', 'test_psdata91'), {
+        requestId: 'test_psdata91',
         userId: 'test_psdata91',
         email: 'psdata91@gmail.com',
         displayName: 'pramesh shaminda',
+        photoURL: null,
         status: 'pending',
-        notes: 'Awaiting Admin Approval',
+        notes: 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
+        ownerEmail: SUPER_ADMIN_EMAIL,
         targetAdminEmail: SUPER_ADMIN_EMAIL,
+        createdAt: serverTimestamp(),
         requestedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -144,70 +149,59 @@ export async function seedInitialAdminUsers(): Promise<void> {
  */
 export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
   try {
-    // Only Super Admin can list all users in Firestore
-    const currentEmail = auth.currentUser?.email?.toLowerCase();
-    if (currentEmail !== SUPER_ADMIN_EMAIL.toLowerCase()) {
-      const cached = getCachedProfiles();
-      return {
-        superAdmin: SUPER_ADMIN_EMAIL,
-        defaultAllowedDays: 7,
-        totalUsers: cached.length,
-        unreadCount: cached.filter((u) => u.unreadBySuperAdmin).length,
-        users: cached,
-      };
-    }
-
     const usersCol = collection(db, 'users');
-    const snapshot = await getDocs(usersCol);
+    const reqCol = collection(db, 'approval_requests');
+
+    const [snapshot, reqSnap] = await Promise.all([
+      getDocs(usersCol),
+      getDocs(reqCol).catch(() => ({ docs: [] } as any)),
+    ]);
 
     let users: UserAccessProfile[] = snapshot.docs.map((docSnap) => mapDocToProfile(docSnap));
 
-    // Also fetch pending approval requests to ensure all requests appear
-    try {
-      const reqCol = collection(db, 'approval_requests');
-      const reqSnap = await getDocs(reqCol);
-      reqSnap.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (!data || !data.email) return;
-        const cleanEmail = data.email.trim().toLowerCase();
-        if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) return;
+    // Merge approval requests from approval_requests collection
+    reqSnap.docs.forEach((docSnap: any) => {
+      const data = docSnap.data();
+      if (!data || !data.email) return;
+      const cleanEmail = data.email.trim().toLowerCase();
+      if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) return;
 
-        const existingIdx = users.findIndex(
-          (u) => u.userId === data.userId || u.email.toLowerCase() === cleanEmail
-        );
-        if (existingIdx >= 0) {
-          if (data.status === 'pending') {
-            users[existingIdx] = {
-              ...users[existingIdx],
-              status: 'pending',
-              unreadBySuperAdmin: true,
-              notes: data.notes || users[existingIdx].notes || 'Approval Requested',
-            };
-          }
-        } else {
-          const now = Date.now();
-          users.push({
-            userId: data.userId || docSnap.id,
-            email: data.email,
-            displayName: data.displayName || data.email.split('@')[0],
-            photoURL: data.photoURL || undefined,
-            role: 'client',
-            parentAdminEmail: SUPER_ADMIN_EMAIL,
-            firstLoginTime: now,
-            firstLoginString: new Date(now).toLocaleDateString(),
-            allowedDays: 0,
-            expiresAt: now,
-            expiresAtString: new Date(now).toLocaleDateString(),
+      const existingIdx = users.findIndex(
+        (u) => u.userId === (data.userId || docSnap.id) || u.email.toLowerCase() === cleanEmail
+      );
+      if (existingIdx >= 0) {
+        if (data.status === 'pending') {
+          users[existingIdx] = {
+            ...users[existingIdx],
             status: 'pending',
-            lastLoginTime: now,
-            lastLoginString: new Date(now).toLocaleString(),
-            notes: data.notes || 'Approval Requested',
             unreadBySuperAdmin: true,
-            permissions: getDefaultPermissions('client'),
-          });
+            notes: data.notes || users[existingIdx].notes || 'Approval Requested',
+          };
         }
-      });
-    } catch {}
+      } else {
+        const now = Date.now();
+        const reqCreated = data.createdAt?.toMillis ? data.createdAt.toMillis() : now;
+        users.push({
+          userId: data.userId || docSnap.id,
+          email: data.email,
+          displayName: data.displayName || cleanEmail.split('@')[0],
+          photoURL: data.photoURL || undefined,
+          role: 'user',
+          parentAdminEmail: SUPER_ADMIN_EMAIL,
+          firstLoginTime: reqCreated,
+          firstLoginString: new Date(reqCreated).toLocaleDateString(),
+          allowedDays: 0,
+          expiresAt: reqCreated,
+          expiresAtString: new Date(reqCreated).toLocaleDateString(),
+          status: 'pending',
+          lastLoginTime: reqCreated,
+          lastLoginString: new Date(reqCreated).toLocaleString(),
+          notes: data.notes || 'Approval Requested',
+          unreadBySuperAdmin: true,
+          permissions: getDefaultPermissions('user' as UserRole),
+        });
+      }
+    });
 
     // Guarantee Super Admin presence
     const hasSuperAdmin = users.some((u) => u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
@@ -234,14 +228,14 @@ export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
       users.unshift(superAdminProfile);
     }
 
-    // Sort: Super Admin top, then unread/pending users, then newest logins
+    // Sort: Super Admin first, then pending approvals, then unread, then recent logins
     users.sort((a, b) => {
       if (a.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return -1;
       if (b.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return 1;
-      if (a.unreadBySuperAdmin && !b.unreadBySuperAdmin) return -1;
-      if (!a.unreadBySuperAdmin && b.unreadBySuperAdmin) return 1;
       if (a.status === 'pending' && b.status !== 'pending') return -1;
       if (a.status !== 'pending' && b.status === 'pending') return 1;
+      if (a.unreadBySuperAdmin && !b.unreadBySuperAdmin) return -1;
+      if (!a.unreadBySuperAdmin && b.unreadBySuperAdmin) return 1;
       return (b.lastLoginTime || 0) - (a.lastLoginTime || 0);
     });
 
@@ -249,7 +243,8 @@ export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
       localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(users));
     } catch {}
 
-    const unreadCount = users.filter((u) => u.unreadBySuperAdmin && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()).length;
+    const clientsOnly = users.filter((u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
+    const unreadCount = clientsOnly.filter((u) => u.unreadBySuperAdmin || u.status === 'pending').length;
 
     return {
       superAdmin: SUPER_ADMIN_EMAIL,
@@ -259,18 +254,15 @@ export async function fetchServerUsers(): Promise<ServerUsersResponse | null> {
       users,
     };
   } catch (err) {
-    console.warn('Network error fetching Firestore users:', err);
+    console.warn('Error fetching Firestore users:', err);
     const cached = getCachedProfiles();
-    if (cached.length > 0) {
-      return {
-        superAdmin: SUPER_ADMIN_EMAIL,
-        defaultAllowedDays: 7,
-        totalUsers: cached.length,
-        unreadCount: cached.filter((u) => u.unreadBySuperAdmin).length,
-        users: cached,
-      };
-    }
-    return null;
+    return {
+      superAdmin: SUPER_ADMIN_EMAIL,
+      defaultAllowedDays: 7,
+      totalUsers: cached.length,
+      unreadCount: cached.filter((u) => u.unreadBySuperAdmin || u.status === 'pending').length,
+      users: cached,
+    };
   }
 }
 
@@ -297,7 +289,7 @@ export function subscribeToFirestoreUsers(
       if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) return;
 
       const existingIdx = users.findIndex(
-        (u) => u.userId === data.userId || u.email.toLowerCase() === cleanEmail
+        (u) => u.userId === (data.userId || docSnap.id) || u.email.toLowerCase() === cleanEmail
       );
       if (existingIdx >= 0) {
         if (data.status === 'pending') {
@@ -310,24 +302,25 @@ export function subscribeToFirestoreUsers(
         }
       } else {
         const now = Date.now();
+        const reqCreated = data.createdAt?.toMillis ? data.createdAt.toMillis() : now;
         users.push({
           userId: data.userId || docSnap.id,
           email: data.email,
-          displayName: data.displayName || data.email.split('@')[0],
+          displayName: data.displayName || cleanEmail.split('@')[0],
           photoURL: data.photoURL || undefined,
-          role: 'client',
+          role: 'user',
           parentAdminEmail: SUPER_ADMIN_EMAIL,
-          firstLoginTime: now,
-          firstLoginString: new Date(now).toLocaleDateString(),
+          firstLoginTime: reqCreated,
+          firstLoginString: new Date(reqCreated).toLocaleDateString(),
           allowedDays: 0,
-          expiresAt: now,
-          expiresAtString: new Date(now).toLocaleDateString(),
+          expiresAt: reqCreated,
+          expiresAtString: new Date(reqCreated).toLocaleDateString(),
           status: 'pending',
-          lastLoginTime: now,
-          lastLoginString: new Date(now).toLocaleString(),
+          lastLoginTime: reqCreated,
+          lastLoginString: new Date(reqCreated).toLocaleString(),
           notes: data.notes || 'Approval Requested',
           unreadBySuperAdmin: true,
-          permissions: getDefaultPermissions('client'),
+          permissions: getDefaultPermissions('user' as UserRole),
         });
       }
     });
@@ -358,10 +351,10 @@ export function subscribeToFirestoreUsers(
     users.sort((a, b) => {
       if (a.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return -1;
       if (b.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) return 1;
-      if (a.unreadBySuperAdmin && !b.unreadBySuperAdmin) return -1;
-      if (!a.unreadBySuperAdmin && b.unreadBySuperAdmin) return 1;
       if (a.status === 'pending' && b.status !== 'pending') return -1;
       if (a.status !== 'pending' && b.status === 'pending') return 1;
+      if (a.unreadBySuperAdmin && !b.unreadBySuperAdmin) return -1;
+      if (!a.unreadBySuperAdmin && b.unreadBySuperAdmin) return 1;
       return (b.lastLoginTime || 0) - (a.lastLoginTime || 0);
     });
 
@@ -369,7 +362,9 @@ export function subscribeToFirestoreUsers(
       localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(users));
     } catch {}
 
-    const unreadCount = users.filter((u) => u.unreadBySuperAdmin && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()).length;
+    const clientsOnly = users.filter((u) => u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase());
+    const unreadCount = clientsOnly.filter((u) => u.unreadBySuperAdmin || u.status === 'pending').length;
+
     onUpdate({
       superAdmin: SUPER_ADMIN_EMAIL,
       defaultAllowedDays: 7,
@@ -448,9 +443,12 @@ export function subscribeToUserProfile(
 
 /**
  * Register or update a user on Firestore under Super Admin psgss91@gmail.com
- * Requirements 1 & 2:
- * - psgss91@gmail.com is ALWAYS Super Admin with unlimited permanent access.
- * - Every other user is created with role 'client' and status 'pending' (0 allowed days).
+ * Requirements 1, 2, 3:
+ * 1. psgss91@gmail.com is ALWAYS Super Admin with unlimited permanent access.
+ * 2. When any other Google user signs in for the first time:
+ *    - Create /users/{uid} in Firestore with role="user", status="pending", ownerEmail="psgss91@gmail.com", uid, email, displayName, createdAt, lastLoginAt.
+ * 3. Also create approval request in /approval_requests/{requestId} containing:
+ *    userId, email, displayName, status="pending", ownerEmail="psgss91@gmail.com", createdAt.
  */
 export async function registerUserOnServer(
   user: {
@@ -464,7 +462,8 @@ export async function registerUserOnServer(
   os?: string
 ): Promise<UserAccessProfile | null> {
   if (!user.uid || !user.email) return null;
-  const isSuperAdmin = user.email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+  const cleanEmail = user.email.trim().toLowerCase();
+  const isSuperAdmin = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase();
   const userRef = doc(db, 'users', user.uid);
   const now = Date.now();
   const dateStr = new Date(now).toLocaleDateString();
@@ -494,31 +493,45 @@ export async function registerUserOnServer(
         lastLoginString: timeStr,
         notes: 'Root Super Administrator & System Owner',
         unreadBySuperAdmin: false,
-        deviceInfo: deviceInfo || existing?.deviceInfo,
-        browser: browser || existing?.browser,
-        os: os || existing?.os,
+        deviceInfo: deviceInfo || existing?.deviceInfo || undefined,
+        browser: browser || existing?.browser || undefined,
+        os: os || existing?.os || undefined,
         permissions: getDefaultPermissions('super_admin'),
       };
+
       await setDoc(
         userRef,
         {
-          ...profile,
           uid: user.uid,
+          userId: user.uid,
+          email: user.email,
+          displayName: profile.displayName,
+          photoURL: profile.photoURL || null,
+          role: 'super_admin',
+          status: 'unlimited',
+          allowedDays: 99999,
+          expiresAt: profile.expiresAt,
+          expiresAtString: 'Permanent / Unlimited',
           ownerEmail: SUPER_ADMIN_EMAIL,
+          parentAdminEmail: SUPER_ADMIN_EMAIL,
+          lastLoginTime: now,
+          lastLoginString: timeStr,
           lastLoginAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          notes: profile.notes,
         },
         { merge: true }
       );
     } else {
       if (!existing) {
-        // STRICT REQUIREMENT 2: Every other Google user must be created in Firestore as role "client" with status "pending"
+        // STRICT REQUIREMENT 2: Create /users/{uid} in Firestore
+        // role="user", status="pending", ownerEmail="psgss91@gmail.com", uid, email, displayName, createdAt, lastLoginAt
         profile = {
           userId: user.uid,
           email: user.email,
-          displayName: user.displayName || user.email.split('@')[0],
+          displayName: user.displayName || cleanEmail.split('@')[0],
           photoURL: user.photoURL || undefined,
-          role: 'client',
+          role: 'user',
           parentAdminEmail: SUPER_ADMIN_EMAIL,
           firstLoginTime: now,
           firstLoginString: dateStr,
@@ -530,43 +543,64 @@ export async function registerUserOnServer(
           lastLoginString: timeStr,
           notes: 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
           unreadBySuperAdmin: true,
-          deviceInfo,
-          browser,
-          os,
-          permissions: getDefaultPermissions('client'),
+          permissions: getDefaultPermissions('user' as UserRole),
         };
+
+        // Write /users/{uid}
         await setDoc(userRef, {
-          ...profile,
           uid: user.uid,
+          userId: user.uid,
+          email: user.email,
+          displayName: profile.displayName,
+          photoURL: profile.photoURL || null,
+          role: 'user',
+          status: 'pending',
           ownerEmail: SUPER_ADMIN_EMAIL,
+          parentAdminEmail: SUPER_ADMIN_EMAIL,
+          allowedDays: 0,
+          expiresAt: now,
+          expiresAtString: dateStr,
+          firstLoginTime: now,
+          firstLoginString: dateStr,
+          lastLoginTime: now,
+          lastLoginString: timeStr,
+          notes: profile.notes,
+          unreadBySuperAdmin: true,
           createdAt: serverTimestamp(),
           lastLoginAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
 
-        // Also create approval request in approval_requests collection
+        // STRICT REQUIREMENT 3: Also create approval request in /approval_requests/{requestId}
+        // containing: userId, email, displayName, status="pending", ownerEmail="psgss91@gmail.com", createdAt
         try {
-          await setDoc(doc(db, 'approval_requests', user.uid), {
+          const reqRef = doc(db, 'approval_requests', user.uid);
+          await setDoc(reqRef, {
+            requestId: user.uid,
             userId: user.uid,
             email: user.email,
             displayName: profile.displayName,
             photoURL: profile.photoURL || null,
             status: 'pending',
+            ownerEmail: SUPER_ADMIN_EMAIL,
             targetAdminEmail: SUPER_ADMIN_EMAIL,
-            notes: profile.notes,
+            notes: 'Awaiting Admin Approval (පරිපාලකගේ අනුමැතිය අවශ්‍යයි)',
+            createdAt: serverTimestamp(),
             requestedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           });
-        } catch {}
+        } catch (reqErr) {
+          console.warn('Failed to write approval_requests doc:', reqErr);
+        }
       } else {
-        // Existing user logging in: only update last login and device metadata
-        // STRICT REQUIREMENT 6: Normal users cannot approve themselves or change role/status
+        // Existing user logging in: only update lastLoginAt and device metadata
+        // Normal users cannot approve themselves or change role/status
         profile = {
           userId: user.uid,
           email: user.email,
-          displayName: user.displayName || existing.displayName || user.email.split('@')[0],
+          displayName: user.displayName || existing.displayName || cleanEmail.split('@')[0],
           photoURL: user.photoURL || existing.photoURL || undefined,
-          role: existing.role === 'user' ? 'client' : existing.role || 'client',
+          role: existing.role === 'client' ? 'user' : (existing.role || 'user'),
           parentAdminEmail: SUPER_ADMIN_EMAIL,
           firstLoginTime: existing.firstLoginTime || now,
           firstLoginString: existing.firstLoginString || dateStr,
@@ -577,12 +611,13 @@ export async function registerUserOnServer(
           lastLoginTime: now,
           lastLoginString: timeStr,
           notes: existing.notes || '',
-          unreadBySuperAdmin: existing.unreadBySuperAdmin ?? true,
+          unreadBySuperAdmin: existing.unreadBySuperAdmin ?? (existing.status === 'pending'),
           deviceInfo: deviceInfo || existing.deviceInfo,
           browser: browser || existing.browser,
           os: os || existing.os,
-          permissions: existing.permissions || getDefaultPermissions(existing.role || 'client'),
+          permissions: existing.permissions || getDefaultPermissions((existing.role || 'user') as UserRole),
         };
+
         await setDoc(
           userRef,
           {
@@ -590,9 +625,6 @@ export async function registerUserOnServer(
             photoURL: profile.photoURL || null,
             lastLoginTime: now,
             lastLoginString: timeStr,
-            deviceInfo: profile.deviceInfo || null,
-            browser: profile.browser || null,
-            os: profile.os || null,
             lastLoginAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           },
@@ -611,7 +643,7 @@ export async function registerUserOnServer(
 
     return profile;
   } catch (err) {
-    console.warn('Failed to register user in Firestore:', err);
+    console.error('Failed to register user in Firestore:', err);
     return null;
   }
 }
@@ -632,7 +664,7 @@ export async function registerClientByAdmin(clientData: {
   const days = clientData.allowedDays > 0 ? clientData.allowedDays : 7;
   const isUnlimited = days >= 9999;
   const expiresAt = isUnlimited ? now + 36500 * 86400000 : now + days * 86400000;
-  const role = clientData.role || 'client';
+  const role = clientData.role || 'user';
   const permissions = getDefaultPermissions(role);
 
   const profile: UserAccessProfile = {
@@ -656,9 +688,24 @@ export async function registerClientByAdmin(clientData: {
 
   const userRef = doc(db, 'users', userId);
   await setDoc(userRef, {
-    ...profile,
     uid: userId,
+    userId,
+    email: cleanEmail,
+    displayName: profile.displayName,
+    photoURL: null,
+    role,
+    status: profile.status,
+    allowedDays: days,
+    expiresAt,
+    expiresAtString: profile.expiresAtString,
     ownerEmail: SUPER_ADMIN_EMAIL,
+    parentAdminEmail: SUPER_ADMIN_EMAIL,
+    firstLoginTime: now,
+    firstLoginString: profile.firstLoginString,
+    lastLoginTime: now,
+    lastLoginString: profile.lastLoginString,
+    notes: profile.notes,
+    unreadBySuperAdmin: false,
     createdAt: serverTimestamp(),
     lastLoginAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -721,7 +768,7 @@ export async function updateUserRoleOnServer(
 }
 
 /**
- * Super Admin action: update user allowed days or status
+ * Super Admin action: update user allowed days or status (e.g. block, unblock, extend days)
  */
 export async function updateUserAccessOnServer(
   userId: string,
@@ -751,6 +798,20 @@ export async function updateUserAccessOnServer(
 
   await updateDoc(userRef, updateData);
 
+  // Sync approval_requests document if status changed
+  if (params.status) {
+    try {
+      await setDoc(
+        doc(db, 'approval_requests', userId),
+        {
+          status: params.status === 'active' || params.status === 'unlimited' ? 'approved' : params.status,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch {}
+  }
+
   const updated: UserAccessProfile = {
     ...mapDocToProfile(existing),
     ...updateData,
@@ -771,6 +832,7 @@ export async function updateUserAccessOnServer(
 
 /**
  * Super Admin action: approve and activate a user's access
+ * Requirement 7: updates Firestore status from 'pending' to 'active' and sets allowedDays/access expiry.
  */
 export async function approveUserOnServer(
   userId: string,
@@ -779,15 +841,14 @@ export async function approveUserOnServer(
 ): Promise<UserAccessProfile | null> {
   const userRef = doc(db, 'users', userId);
   const snap = await getDoc(userRef);
-  if (!snap.exists()) throw new Error('User not found in Firestore');
-  const existing = snap.data();
+  const existing = snap.exists() ? snap.data() : null;
 
   const now = Date.now();
   const days = allowedDays > 0 ? allowedDays : 30;
   const isUnlimited = days >= 9999;
   const newExpiresAt = isUnlimited ? now + 36500 * 86400000 : now + days * 86400000;
-  const targetRole = role || existing.role || 'client';
-  const permissions = getDefaultPermissions(targetRole);
+  const targetRole = role || (existing?.role === 'super_admin' ? 'user' : (existing?.role || 'user'));
+  const permissions = getDefaultPermissions(targetRole as UserRole);
 
   const updateData: any = {
     status: isUnlimited ? 'unlimited' : 'active',
@@ -801,9 +862,24 @@ export async function approveUserOnServer(
     updatedAt: serverTimestamp(),
   };
 
-  await updateDoc(userRef, updateData);
+  if (snap.exists()) {
+    await updateDoc(userRef, updateData);
+  } else {
+    await setDoc(userRef, {
+      uid: userId,
+      userId,
+      email: existing?.email || '',
+      displayName: existing?.displayName || 'User',
+      photoURL: existing?.photoURL || null,
+      ownerEmail: SUPER_ADMIN_EMAIL,
+      parentAdminEmail: SUPER_ADMIN_EMAIL,
+      createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+      ...updateData,
+    });
+  }
 
-  // Sync approval_requests document
+  // Update /approval_requests/{userId} as well
   try {
     await setDoc(
       doc(db, 'approval_requests', userId),
@@ -818,25 +894,25 @@ export async function approveUserOnServer(
   } catch {}
 
   const updated: UserAccessProfile = {
-    ...mapDocToProfile(existing),
+    ...mapDocToProfile(existing || { userId }),
     ...updateData,
     userId,
   };
 
   const cached = getCachedProfiles();
   const idx = cached.findIndex((p) => p.userId === userId);
-  if (idx >= 0) {
-    cached[idx] = updated;
-    try {
-      localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(cached));
-    } catch {}
-  }
+  if (idx >= 0) cached[idx] = updated;
+  else cached.unshift(updated);
+  try {
+    localStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(cached));
+  } catch {}
 
   return updated;
 }
 
 /**
  * Super Admin action: delete a user from Firestore
+ * Requirement 8: delete from both /users and /approval_requests
  */
 export async function deleteUserOnServer(userId: string): Promise<boolean> {
   const userRef = doc(db, 'users', userId);
@@ -915,6 +991,7 @@ export async function getServerSystemStatus(): Promise<SystemStatusResponse | nu
 
 /**
  * Submit an approval request directly to Firestore
+ * Requirement 3: /approval_requests/{requestId} containing userId, email, displayName, status="pending", ownerEmail="psgss91@gmail.com", createdAt
  */
 export async function submitApprovalRequest(
   user: {
@@ -938,13 +1015,16 @@ export async function submitApprovalRequest(
     await setDoc(
       reqRef,
       {
+        requestId: user.uid,
         userId: user.uid,
         email: user.email,
         displayName: user.displayName || user.email.split('@')[0],
         photoURL: user.photoURL || null,
         status: 'pending',
-        notes: note || `Approval Requested on ${timeStr}`,
+        ownerEmail: SUPER_ADMIN_EMAIL,
         targetAdminEmail: SUPER_ADMIN_EMAIL,
+        notes: note || `Approval Requested on ${timeStr}`,
+        createdAt: serverTimestamp(),
         requestedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       },
@@ -960,7 +1040,7 @@ export async function submitApprovalRequest(
         email: user.email,
         displayName: user.displayName || user.email.split('@')[0],
         photoURL: user.photoURL || undefined,
-        role: 'client',
+        role: 'user',
         parentAdminEmail: SUPER_ADMIN_EMAIL,
         firstLoginTime: now,
         firstLoginString: new Date(now).toLocaleDateString(),
@@ -972,12 +1052,27 @@ export async function submitApprovalRequest(
         lastLoginString: timeStr,
         notes: note || `Approval Requested on ${timeStr}`,
         unreadBySuperAdmin: true,
-        permissions: getDefaultPermissions('client'),
+        permissions: getDefaultPermissions('user' as UserRole),
       };
       await setDoc(userRef, {
-        ...profile,
         uid: user.uid,
+        userId: user.uid,
+        email: user.email,
+        displayName: profile.displayName,
+        photoURL: profile.photoURL || null,
+        role: 'user',
+        status: 'pending',
         ownerEmail: SUPER_ADMIN_EMAIL,
+        parentAdminEmail: SUPER_ADMIN_EMAIL,
+        allowedDays: 0,
+        expiresAt: now,
+        expiresAtString: profile.expiresAtString,
+        firstLoginTime: now,
+        firstLoginString: profile.firstLoginString,
+        lastLoginTime: now,
+        lastLoginString: timeStr,
+        notes: profile.notes,
+        unreadBySuperAdmin: true,
         createdAt: serverTimestamp(),
         lastLoginAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

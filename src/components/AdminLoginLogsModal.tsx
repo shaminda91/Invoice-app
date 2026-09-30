@@ -24,8 +24,6 @@ import {
   toggleUserBlocked,
   deleteUserProfile,
   registerNewClientManually,
-  syncProfilesToDrive,
-  fetchProfilesFromDrive,
   changeUserRole,
   approveUserAccess,
   getRoleBadgeClass,
@@ -36,6 +34,7 @@ import {
   subscribeToFirestoreUsers,
   markRegistrationsAsReadOnServer,
   updateUserAccessOnServer,
+  deleteUserOnServer,
 } from '../services/superAdminApi';
 import {
   Shield,
@@ -125,28 +124,32 @@ export function AdminLoginLogsModal({
   const [showRegisterForm, setShowRegisterForm] = useState(false);
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientName, setNewClientName] = useState('');
-  const [newClientRole, setNewClientRole] = useState<UserRole>('client');
+  const [newClientRole, setNewClientRole] = useState<UserRole>('user');
   const [newClientDays, setNewClientDays] = useState(7);
   const [newClientNotes, setNewClientNotes] = useState('');
-  const [isDriveSyncingUsers, setIsDriveSyncingUsers] = useState(false);
+  const [isRefreshingFirestore, setIsRefreshingFirestore] = useState(false);
 
   // Role filtering & updating state
   const [roleFilter, setRoleFilter] = useState<string>(initialRoleFilter || 'all');
   const [isUpdatingRoleId, setIsUpdatingRoleId] = useState<string | null>(null);
 
-  const refreshData = () => {
-    setUserProfiles(getAllUserProfiles());
+  const refreshData = async () => {
     const currentSettings = getAccessSettings();
     setSettings(currentSettings);
     setDefaultDaysInput(currentSettings.defaultAllowedDays);
     setNewClientDays(currentSettings.defaultAllowedDays);
 
-    // Also fetch fresh users from central server
-    fetchServerUsers().then((res) => {
-      if (res && res.users && res.users.length > 0) {
+    // Fetch fresh users and pending requests from Firestore
+    try {
+      const res = await fetchServerUsers();
+      if (res && Array.isArray(res.users) && res.users.length > 0) {
         setUserProfiles(res.users);
+      } else {
+        setUserProfiles(getAllUserProfiles());
       }
-    }).catch(() => {});
+    } catch {
+      setUserProfiles(getAllUserProfiles());
+    }
   };
 
   useEffect(() => {
@@ -165,13 +168,8 @@ export function AdminLoginLogsModal({
         }
       });
 
-      // Auto-fetch from Drive if token is available
+      // Auto-fetch login logs from Drive if token is available
       if (driveAccessToken) {
-        fetchProfilesFromDrive(driveAccessToken).then((profiles) => {
-          if (profiles && profiles.length > 0) {
-            setUserProfiles(profiles);
-          }
-        }).catch(() => {});
         fetchLoginRecordsFromDrive(driveAccessToken).then((logs) => {
           if (logs && logs.length > 0) {
             onRecordsUpdated(logs);
@@ -198,14 +196,11 @@ export function AdminLoginLogsModal({
       newClientNotes,
       newClientRole
     );
-    if (driveAccessToken) {
-      syncProfilesToDrive(driveAccessToken).catch(() => {});
-    }
     showToast(`${profile.email} - ${t.clientRegisteredSuccess} (${newClientRole})`);
     setNewClientEmail('');
     setNewClientName('');
     setNewClientNotes('');
-    setNewClientRole('client');
+    setNewClientRole('user');
     setShowRegisterForm(false);
     refreshData();
   };
@@ -237,23 +232,19 @@ export function AdminLoginLogsModal({
     } catch {}
   };
 
-  const handleDriveSyncUsers = async () => {
-    if (!driveAccessToken) {
-      showToast(t.driveNotConnected);
-      if (onConnectGoogle) onConnectGoogle();
-      return;
-    }
-    setIsDriveSyncingUsers(true);
+  // Requirement 18: Refresh button reloads Firestore data directly
+  const handleRefreshFirestoreUsers = async () => {
+    setIsRefreshingFirestore(true);
     try {
-      const fetchedProfiles = await fetchProfilesFromDrive(driveAccessToken);
-      const fetchedLogs = await fetchLoginRecordsFromDrive(driveAccessToken);
-      setUserProfiles(fetchedProfiles);
-      onRecordsUpdated(fetchedLogs);
-      showToast('Profiles and login records synchronized with Google Drive');
+      const res = await fetchServerUsers();
+      if (res && Array.isArray(res.users)) {
+        setUserProfiles(res.users);
+      }
+      showToast('Users & pending approval requests refreshed from Firestore');
     } catch (err: any) {
-      showToast(err?.message || 'Failed to sync with Google Drive');
+      showToast(err?.message || 'Failed to refresh from Firestore');
     } finally {
-      setIsDriveSyncingUsers(false);
+      setIsRefreshingFirestore(false);
     }
   };
 
@@ -330,50 +321,85 @@ export function AdminLoginLogsModal({
   };
 
   // Grant extra days
-  const handleExtendDays = (userId: string, extraDays: number) => {
-    extendUserAccessDays(userId, extraDays);
-    refreshData();
+  const handleExtendDays = async (userId: string, extraDays: number) => {
+    const updated = extendUserAccessDays(userId, extraDays);
+    if (updated) {
+      await updateUserAccessOnServer(userId, {
+        allowedDays: updated.allowedDays,
+        status: 'active',
+        notes: updated.notes,
+      });
+      setUserProfiles((prev) => prev.map((u) => (u.userId === userId ? updated : u)));
+    } else {
+      refreshData();
+    }
     showToast(`${t.grant7Days} ${t.userDaysUpdatedSuccess}`);
   };
 
   // Set exact days
-  const handleSetExactDays = (userId: string) => {
+  const handleSetExactDays = async (userId: string) => {
     if (customDaysInput <= 0) return;
     setUserExactAllowedDays(userId, customDaysInput);
+    const updated = await updateUserAccessOnServer(userId, { allowedDays: customDaysInput });
+    if (updated) {
+      setUserProfiles((prev) => prev.map((u) => (u.userId === userId ? updated : u)));
+    } else {
+      refreshData();
+    }
     setEditingUserId(null);
-    refreshData();
     showToast(t.userDaysUpdatedSuccess);
   };
 
   // Toggle unlimited
-  const handleToggleUnlimited = (user: UserAccessProfile) => {
+  const handleToggleUnlimited = async (user: UserAccessProfile) => {
     const isCurrentlyUnlimited = user.status === 'unlimited';
     toggleUserUnlimited(user.userId, !isCurrentlyUnlimited);
-    refreshData();
+    const updated = await updateUserAccessOnServer(user.userId, {
+      status: !isCurrentlyUnlimited ? 'unlimited' : 'active',
+    });
+    if (updated) {
+      setUserProfiles((prev) => prev.map((u) => (u.userId === user.userId ? updated : u)));
+    } else {
+      refreshData();
+    }
     showToast(t.userDaysUpdatedSuccess);
   };
 
   // Toggle block / expire
-  const handleToggleBlock = (user: UserAccessProfile) => {
+  const handleToggleBlock = async (user: UserAccessProfile) => {
     const isCurrentlyBlocked = user.status === 'blocked';
     toggleUserBlocked(user.userId, !isCurrentlyBlocked);
-    refreshData();
+    const updated = await updateUserAccessOnServer(user.userId, {
+      status: !isCurrentlyBlocked ? 'blocked' : 'active',
+    });
+    if (updated) {
+      setUserProfiles((prev) => prev.map((u) => (u.userId === user.userId ? updated : u)));
+    } else {
+      refreshData();
+    }
     showToast(t.userDaysUpdatedSuccess);
   };
 
   // Expire immediately
-  const handleExpireImmediately = (userId: string) => {
+  const handleExpireImmediately = async (userId: string) => {
     setUserExactAllowedDays(userId, 0);
-    refreshData();
+    const updated = await updateUserAccessOnServer(userId, { allowedDays: 0, status: 'expired' });
+    if (updated) {
+      setUserProfiles((prev) => prev.map((u) => (u.userId === userId ? updated : u)));
+    } else {
+      refreshData();
+    }
     showToast('User marked as expired');
   };
 
   // Delete profile
-  const handleDeleteUser = (userId: string, email: string) => {
+  const handleDeleteUser = async (userId: string, email: string) => {
     if (window.confirm(`Delete user access record for ${email}?`)) {
       deleteUserProfile(userId);
+      await deleteUserOnServer(userId);
+      setUserProfiles((prev) => prev.filter((u) => u.userId !== userId && u.email.toLowerCase() !== email.toLowerCase()));
       refreshData();
-      showToast('User record deleted');
+      showToast('User record deleted from Firestore');
     }
   };
 
@@ -736,13 +762,13 @@ export function AdminLoginLogsModal({
 
                   <button
                     type="button"
-                    onClick={handleDriveSyncUsers}
-                    disabled={isDriveSyncingUsers}
+                    onClick={handleRefreshFirestoreUsers}
+                    disabled={isRefreshingFirestore}
                     className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                    title={t.refreshFromDrive}
+                    title="Refresh Users and Pending Approvals from Firestore"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isDriveSyncingUsers ? 'animate-spin text-emerald-600' : ''}`} />
-                    <span className="hidden sm:inline">{t.refreshFromDrive}</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingFirestore ? 'animate-spin text-emerald-600' : ''}`} />
+                    <span className="hidden sm:inline">Refresh from Firestore</span>
                   </button>
                 </div>
               </div>
@@ -1218,6 +1244,21 @@ export function AdminLoginLogsModal({
                                     title="Revoke Approval (Lock until re-approved)"
                                   >
                                     Revoke
+                                  </button>
+
+                                  {/* BLOCK / UNBLOCK */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleBlock(user)}
+                                    className={`px-2 py-1 text-[11px] font-bold rounded-md border transition-colors cursor-pointer ${
+                                      user.status === 'blocked'
+                                        ? 'text-rose-800 bg-rose-100 border-rose-300'
+                                        : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border-slate-200'
+                                    }`}
+                                    title={user.status === 'blocked' ? 'Unblock User' : 'Block User'}
+                                  >
+                                    <Lock className="w-3 h-3 inline mr-0.5" />
+                                    <span>{user.status === 'blocked' ? 'Unblock' : 'Block'}</span>
                                   </button>
 
                                   {/* DELETE */}

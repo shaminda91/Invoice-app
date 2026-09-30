@@ -77,6 +77,7 @@ export function getDefaultPermissions(role: UserRole): UserPermissions {
         canManageUsers: false,
       };
     case 'client':
+    case 'user':
       return {
         canCreateInvoice: true,
         canEditInvoice: true,
@@ -114,6 +115,7 @@ export function getRoleBadgeClass(role: UserRole): string {
     case 'editor':
       return 'bg-blue-100 text-blue-800 border-blue-300 font-bold';
     case 'client':
+    case 'user':
       return 'bg-emerald-100 text-emerald-800 border-emerald-300 font-medium';
     case 'viewer':
     default:
@@ -151,10 +153,11 @@ export function getRoleLabel(role: UserRole, lang: string = 'si'): { name: strin
         desc: lang === 'si' ? 'ඉන්වොයිස් සකසන්නා' : 'Invoice Creator & Editor',
       };
     case 'client':
+    case 'user':
       return {
-        name: lang === 'si' ? 'සේවාලාභියා (Client)' : lang === 'ta' ? 'வாடிக்கையாளர் (Client)' : 'Client',
+        name: lang === 'si' ? 'පරිශීලක (User)' : lang === 'ta' ? 'பயனர் (User)' : 'Standard User',
         icon: '👤',
-        desc: lang === 'si' ? 'සේවාලාභියා' : 'Standard Client Account',
+        desc: lang === 'si' ? 'සාමාන්‍ය පරිශීලක ගිණුම' : 'Standard User Account',
       };
     case 'viewer':
     default:
@@ -327,13 +330,6 @@ export function registerOrUpdateUserAccess(
   registerUserOnServer(user).catch((err) => {
     console.warn('Failed to sync registration to central server:', err);
   });
-
-  // Sync to Google Drive if admin token is available
-  if (driveAccessToken) {
-    syncProfilesToDrive(driveAccessToken, profiles).catch((err) => {
-      console.warn('Failed to sync user profiles to Google Drive:', err);
-    });
-  }
 
   return profile;
 }

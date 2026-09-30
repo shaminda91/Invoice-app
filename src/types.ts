@@ -98,6 +98,7 @@ export type UserRole =
   | 'manager'
   | 'editor'
   | 'client'
+  | 'user'
   | 'viewer';
 
 export interface UserPermissions {

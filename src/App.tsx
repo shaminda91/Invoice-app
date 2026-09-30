@@ -26,7 +26,6 @@ import {
   getAllUserProfiles,
   getAccessSettings,
   saveAccessSettings,
-  fetchProfilesFromDrive,
 } from './services/userAccessManager';
 import {
   fetchServerUsers,
@@ -293,12 +292,9 @@ export default function App() {
         // Fetch latest registered profiles from server so user status updates immediately
         loadServerUsers();
 
-        // If super admin logs in, also auto-fetch from Google Drive
+        // If super admin logs in, auto-fetch login records from Google Drive
         if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
           if (token) {
-            fetchProfilesFromDrive(token).then(() => {
-              setAccessRefreshCounter((c) => c + 1);
-            }).catch(() => {});
             fetchLoginRecordsFromDrive(token).then((driveLogs) => {
               if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
             }).catch(() => {});
@@ -493,11 +489,10 @@ export default function App() {
         setAccessRefreshCounter((c) => c + 1);
       } catch {}
 
-      // If Super Admin logs in, auto-fetch from Google Drive
+      // If Super Admin logs in, auto-fetch login records from Google Drive
       if (user.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
         try {
           if (accessToken) {
-            await fetchProfilesFromDrive(accessToken);
             const driveLogs = await fetchLoginRecordsFromDrive(accessToken);
             if (driveLogs && driveLogs.length > 0) setLoginRecords(driveLogs);
           }
