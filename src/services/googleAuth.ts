@@ -11,7 +11,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { getFirestore, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
@@ -20,13 +20,21 @@ export const db = getFirestore(app);
 const registerFirestoreUser = async (user: User) => {
   if (!user.uid || !user.email) return;
 
-  const isAdmin = user.email.trim().toLowerCase() === 'psgss91@gmail.com';
+  const userRef = doc(db, 'users', user.uid);
+  const existingSnap = await getDoc(userRef);
+  const existing = existingSnap.exists() ? existingSnap.data() : null;
 
-  await setDoc(doc(db, 'users', user.uid), {
+  const isSuperAdmin = user.email.trim().toLowerCase() === 'psgss91@gmail.com';
+
+  await setDoc(userRef, {
     uid: user.uid,
     email: user.email,
-    displayName: user.displayName || 'Google User',
-    role: isAdmin ? 'admin' : 'user',
+    displayName: user.displayName || existing?.displayName || 'Google User',
+    ...(isSuperAdmin
+      ? { role: 'super_admin' }
+      : !existing
+        ? { role: 'user' }
+        : {}),
     ownerEmail: 'psgss91@gmail.com',
     lastLoginAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
